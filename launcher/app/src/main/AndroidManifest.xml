@@ -8,6 +8,13 @@
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Only for the optional market ticker (config.xml show_ticker), which reads Yahoo Finance quotes. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Only for the optional overlay clock (config.xml show_overlay_clock). The overlay app-op is granted over
+         ADB; the service runs in the foreground so it is not stopped while another app is in front. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Needed since Android 10 to read the Wi-Fi network name for the network pill. Never requested at
          runtime: build-and-install grants it with pm grant, so lint's Android 12 "ask for COARSE with
@@ -239,6 +246,15 @@
                 <action android:name="com.gathin.tvhome.GUARD" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name=".OverlayClockService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Clock shown over other apps" />
+        </service>
 
         <service
             android:name=".InputKeyService"

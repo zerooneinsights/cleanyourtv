@@ -30,11 +30,12 @@
     <!-- Apps never shown as tiles (e.g. the Live TV app, which the Inputs menu already covers). -->
     <string-array name="hidden_apps">
         <item>com.mediatek.wwtv.tvcenter</item>
+        <item>com.sony.dtv.tvx</item>
         <item>com.mitv.gallery</item>
     </string-array>
 
     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
-    <string name="live_tv_package" translatable="false">com.mediatek.wwtv.tvcenter</string>
+    <string name="live_tv_package" translatable="false">com.sony.dtv.tvx</string>
 
     <!-- Open the Live TV app above the first time Home comes up after the TV is switched on, for sets that are
          mostly used for broadcast TV. Once per boot: Home after that stays Home. Can also be set with
@@ -456,6 +457,19 @@
     <!-- One line under the clock: CPU, free memory and free storage. Off by default; a theme can set
          "show_stats": true. Nothing is read, and the clock does not move, while this is false. -->
     <bool name="show_stats">false</bool>
+
+    <!-- One line under the clock with live index quotes from Yahoo Finance (MarketTicker), read only while Home
+         is on screen. Needs the INTERNET permission in the manifest. Each item is "Yahoo symbol|label". -->
+    <bool name="show_ticker">true</bool>
+
+    <!-- A small clock in the top-right corner over every app, hidden on Home (OverlayClockService). Needs the
+         overlay app-op once: tools/tv.py 'appops set com.gathin.tvhome SYSTEM_ALERT_WINDOW allow'. -->
+    <bool name="show_overlay_clock">true</bool>
+    <integer name="overlay_clock_sp">12</integer>
+    <string-array name="ticker_symbols" translatable="false">
+        <item>^NSEI|NIFTY 50</item>
+        <item>NIFTYMIDCAP150.NS|MIDCAP 150</item>
+    </string-array>
 
     <!-- Each team's next game in the F1 panel's place under the clock, rotating with the theme's F1 weekend: the package
          of an add-on that publishes them (the Game Day add-on: io.github.justinnewman.gameday; contract in docs/modules.md).
