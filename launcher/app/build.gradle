@@ -15,6 +15,14 @@ android {
         targetSdk 34
         versionCode 12
         versionName '3.3'
+        // The weather place from launcher/local.properties (never committed), over config.xml's weather_*; empty
+        // values leave config.xml's in charge.
+        def localProps = new Properties()
+        def localFile = rootProject.file('local.properties')
+        if (localFile.exists()) localFile.withInputStream { localProps.load(it) }
+        resValue 'string', 'weather_latitude_local', localProps.getProperty('weather.latitude', '')
+        resValue 'string', 'weather_longitude_local', localProps.getProperty('weather.longitude', '')
+        resValue 'string', 'weather_place_local', localProps.getProperty('weather.place', '')
     }
 
     buildTypes {

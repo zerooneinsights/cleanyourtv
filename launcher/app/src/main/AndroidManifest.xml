@@ -13,6 +13,9 @@
     <!-- Only for the optional overlay clock (config.xml show_overlay_clock). The overlay app-op is granted over
          ADB; the service runs in the foreground so it is not stopped while another app is in front. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Only for the optional calendar panel (config.xml show_agenda): reads the Google calendars the TV syncs.
+         Never requested at runtime: granted with pm grant over ADB. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -183,6 +186,21 @@
                 <data android:scheme="market" android:host="launch" />
             </intent-filter>
         </activity>
+
+        <!-- The full calendar, from Home's calendar button (config.xml show_agenda). -->
+        <activity
+            android:name=".CalendarActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
+        <!-- Edits the subscriptions card's list (config.xml show_subscriptions). -->
+        <activity
+            android:name=".SubscriptionsActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustPan"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
 
         <!-- The same clock, started by Home itself after home_idle_clock_minutes without input. -->
         <activity

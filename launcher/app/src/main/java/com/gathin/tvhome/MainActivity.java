@@ -210,6 +210,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean showStats;
     /** config.xml show_ticker: index quotes under the clock while Home is resumed. Null when off. */
     private MarketTicker ticker;
+    /** config.xml show_agenda: today's and tomorrow's events from the TV's synced calendars. Null when off. */
+    private AgendaPanel agenda;
+    /** config.xml show_cricket: live score card for followed matches. Null when off. */
+    private CricketCard cricket;
+    /** config.xml show_subscriptions: the subscriptions card, refreshed on every resume. Null when off. */
+    private TextView subscriptionsCard;
+    /** Set while the subscriptions editor is opening, so the card is still there when it closes. */
+    private boolean editingSubscriptions;
+    /** config.xml show_weather: the weather line beside the clock. Null when off. */
+    private WeatherLine weather;
     /** config.xml inputs_connected_only: the Inputs menu lists only connected inputs, the rest behind "More inputs". */
     private boolean inputsConnectedOnly;
     /** config.xml inputs_cec_state_only: only CEC device rows show a connection state, bare HDMI ports none. */
@@ -543,6 +553,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         clockRefresh = new ClockRefresh(clockBlock);
         greetingColor = greeting.getCurrentTextColor();
         if (!cfg.showGreeting) greeting.setVisibility(View.GONE);
+        if (!getResources().getBoolean(R.bool.show_date)) findViewById(R.id.date).setVisibility(View.GONE);
         // Keep the other header layouts as designed: their extra lines change the block's centre.
         if (!cfg.showGreeting && !cfg.dateBelowClock && !cfg.shamsiDate && !cfg.lunarDate
                 && !cfg.topMenu && !getResources().getBoolean(R.bool.rtl_menu_bar)) {
@@ -575,6 +586,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (getResources().getBoolean(R.bool.show_ticker)) {
             ticker = new MarketTicker(findViewById(R.id.ticker), handler,
                     getResources().getStringArray(R.array.ticker_symbols));
+        }
+        if (getResources().getBoolean(R.bool.show_agenda)) {
+            agenda = new AgendaPanel(this, findViewById(R.id.agendaPanel), findViewById(R.id.calendarGrid),
+                    findViewById(R.id.calendarMonth), handler);
+        }
+        if (getResources().getBoolean(R.bool.show_weather)) {
+            // launcher/local.properties' weather.* (built in as weather_*_local) wins over config.xml's defaults.
+            boolean local = !getString(R.string.weather_latitude_local).isEmpty();
+            weather = new WeatherLine(findViewById(R.id.weather), handler,
+                    getString(local ? R.string.weather_latitude_local : R.string.weather_latitude),
+                    getString(local ? R.string.weather_longitude_local : R.string.weather_longitude),
+                    getString(local ? R.string.weather_place_local : R.string.weather_place));
+        }
+        if (getResources().getBoolean(R.bool.show_cricket)) {
+            cricket = new CricketCard(findViewById(R.id.cricketCard), handler,
+                    getResources().getStringArray(R.array.cricket_teams),
+                    getResources().getStringArray(R.array.cricket_leagues));
         }
         raceCalendar = cfg.raceCalendar;
         racePanel = findViewById(R.id.racePanel);
@@ -783,6 +811,25 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             });
         }
 
+        // The Today panel and the cricket card fade out as the app grid slides up over them, and back in when the
+        // grid returns.
+        if (agenda != null || cricket != null) {
+            View agendaView = findViewById(R.id.agendaPanel);
+            View cricketView = findViewById(R.id.cricketCard);
+            View calendarView = findViewById(R.id.calendarBlock);
+            float fade = 160 * getResources().getDisplayMetrics().density;
+            grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
+                @Override
+                public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                    int shift = rv.canScrollVertically(-1) ? rv.computeVerticalScrollOffset() : 0;
+                    float alpha = Math.max(0f, 1f - shift / fade);
+                    agendaView.setAlpha(alpha);
+                    cricketView.setAlpha(alpha);
+                    calendarView.setAlpha(alpha);
+                }
+            });
+        }
+
         // Liquid feel: soft springs on the highlight's position.
         springX = new SpringAnimation(glass, new FloatPropertyCompat<View>("glassContentX") {
             @Override
@@ -919,9 +966,71 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnSettings.setOnKeyListener(pillKeys);
         btnReorder.setOnKeyListener(pillKeys);
         btnLibraryTop.setOnKeyListener(pillKeys);
+        if (getResources().getBoolean(R.bool.show_subscriptions)) {
+            subscriptionsCard = findViewById(R.id.subscriptionsCard);
+            TextView btnSubscriptions = findViewById(R.id.btnSubscriptions);
+            btnSubscriptions.setVisibility(View.VISIBLE);
+            btnSubscriptions.setOnKeyListener(pillKeys);
+            if (iconOnlyButtons) makeIconOnly(btnSubscriptions);
+            // The button drops the card down just below itself, right edges lined up, and moves focus onto it (OK
+            // there edits). It is placed once it has measured, invisible until then so it never flashes elsewhere.
+            btnSubscriptions.setOnClickListener(v -> {
+                if (subscriptionsCard.getVisibility() == View.VISIBLE) {
+                    subscriptionsCard.setVisibility(View.GONE);
+                    return;
+                }
+                subscriptionsCard.setText(Subscriptions.card(this));
+                subscriptionsCard.setAlpha(0f);
+                subscriptionsCard.setVisibility(View.VISIBLE);
+                subscriptionsCard.post(() -> {
+                    int[] button = new int[2], parent = new int[2];
+                    btnSubscriptions.getLocationOnScreen(button);
+                    ((View) subscriptionsCard.getParent()).getLocationOnScreen(parent);
+                    float gap = 10 * getResources().getDisplayMetrics().density;
+                    subscriptionsCard.setX(button[0] - parent[0] + btnSubscriptions.getWidth() - subscriptionsCard.getWidth());
+                    subscriptionsCard.setY(button[1] - parent[1] + btnSubscriptions.getHeight() + gap);
+                    subscriptionsCard.setAlpha(1f);
+                    subscriptionsCard.requestFocus();
+                });
+            });
+            // A drop-down: moving focus off it closes it (not when OK opened the editor over Home).
+            subscriptionsCard.setOnFocusChangeListener((v, focused) -> {
+                if (!focused && !editingSubscriptions) subscriptionsCard.setVisibility(View.GONE);
+            });
+            subscriptionsCard.setOnClickListener(v -> {
+                editingSubscriptions = true;
+                startActivity(new Intent(this, SubscriptionsActivity.class));
+            });
+            // Up or Back to the button, Down to the tile Up came from (either closes it); nothing sideways.
+            subscriptionsCard.setOnKeyListener((v, keyCode, event) -> {
+                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    subscriptionsCard.setVisibility(View.GONE);
+                    btnSubscriptions.requestFocus();
+                    return true;
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    btnSubscriptions.requestFocus();
+                    return true;
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    focusTile(singleRow ? lastFocused : lastFocused % COLUMNS);
+                    return true;
+                }
+                return keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
+            });
+        }
+        TextView btnCalendar = findViewById(R.id.btnCalendar);
+        if (agenda != null) {
+            btnCalendar.setVisibility(View.VISIBLE);
+            btnCalendar.setOnClickListener(v -> startActivity(new Intent(this, CalendarActivity.class)));
+            btnCalendar.setOnKeyListener(pillKeys);
+            if (iconOnlyButtons) makeIconOnly(btnCalendar);
+        }
         for (View button : topAppButtons) button.setOnKeyListener(pillKeys);
         if (advancedEffects) {
-            List<View> pills = new ArrayList<>(Arrays.asList(btnInputs, btnWifi, btnVpn, btnReorder, btnLibraryTop, btnSettings));
+            List<View> pills = new ArrayList<>(Arrays.asList(btnInputs, btnWifi, btnVpn, btnReorder, btnLibraryTop,
+                    btnCalendar, btnSettings));
             pills.addAll(topAppButtons);
             for (View button : pills) {
                 button.setOnFocusChangeListener((view, focused) -> view.animate()
@@ -1138,6 +1247,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         if (showStats) startStats();
         if (ticker != null) ticker.start();
+        if (agenda != null) agenda.start();
+        if (cricket != null) cricket.start();
+        if (weather != null) weather.start();
+        if (subscriptionsCard != null) subscriptionsCard.setText(Subscriptions.card(this));   // back from editing
         if (gameDay != null) gameDay.start();
         sky.update();
         wallpaperPlayer.start();
@@ -1308,6 +1421,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onPause() {
         super.onPause();
         resumed = false;
+        // Leaving Home tucks the subscriptions card away again, except for a trip to its own editor.
+        if (subscriptionsCard != null && !editingSubscriptions) subscriptionsCard.setVisibility(View.GONE);
+        editingSubscriptions = false;
         OverlayClockService.setHomeVisible(false);
         // No UP reaches a paused Home, so a vendor-key hold it saw go down would still open its app later.
         // Only Home's own share is dropped: a key service that saw the same DOWN keeps its hold.
@@ -1325,6 +1441,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         startPending = null;   // leaving Home before the network came back: the boot's app stays closed
         stopStats();
         if (ticker != null) ticker.stop();
+        if (agenda != null) agenda.stop();
+        if (cricket != null) cricket.stop();
+        if (weather != null) weather.stop();
         if (gameDay != null) gameDay.stop();
         handler.removeCallbacks(turnTick);
         if (lamp != null) lamp.stop();

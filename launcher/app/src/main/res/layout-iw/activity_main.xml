@@ -113,6 +113,109 @@
         android:visibility="gone"
         android:importantForAccessibility="no" />
 
+    <!-- Home widgets (left, under the clock): the market ticker card (MarketTicker) and, while a followed match is
+         live, the cricket card (CricketCard), stacked. -->
+    <LinearLayout
+        android:id="@+id/leftWidgets"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="56dp"
+        android:layout_marginTop="118dp"
+        android:orientation="vertical"
+        android:focusable="false"
+        android:importantForAccessibility="no">
+
+        <LinearLayout
+            android:id="@+id/ticker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_card"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/cricketCard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/widget_card"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:maxWidth="400dp"
+            android:maxLines="6"
+            android:ellipsize="end"
+            android:gravity="start"
+            android:lineSpacingExtra="3dp"
+            android:textColor="#F2FFFFFF"
+            android:textSize="14sp"
+            android:fontFamily="@string/font_medium"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Calendar card (AgendaPanel), shown only when show_agenda is on and READ_CALENDAR is granted: today's and
+         tomorrow's events, and this month as a small grid, under the top buttons. -->
+    <LinearLayout
+        android:id="@+id/calendarBlock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginEnd="60dp"
+        android:layout_marginTop="118dp"
+        android:background="@drawable/widget_card"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="10dp"
+        android:visibility="gone"
+        android:focusable="false"
+        android:importantForAccessibility="no">
+
+        <TextView
+            android:id="@+id/agendaPanel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="18dp"
+            android:minWidth="150dp"
+            android:maxWidth="200dp"
+            android:maxLines="12"
+            android:ellipsize="end"
+            android:gravity="start"
+            android:lineSpacingExtra="3dp"
+            android:textColor="#E6FFFFFF"
+            android:textSize="13sp"
+            android:fontFamily="@string/font_regular" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/calendarMonth"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="#B3FFFFFF"
+                android:textSize="11sp"
+                android:letterSpacing="0.14"
+                android:fontFamily="@string/font_medium" />
+
+            <com.gathin.tvhome.MonthGridView
+                android:id="@+id/calendarGrid"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+    </LinearLayout>
+
     <!-- Top shelf: the focused dock app's name, positioned above the dock in code. -->
     <LinearLayout
         android:id="@+id/hero"
@@ -208,6 +311,21 @@
                         android:textSize="17sp"
                         android:fontFamily="@string/font_regular"
                         android:letterSpacing="0.02"
+                        android:includeFontPadding="false"
+                        android:visibility="gone" />
+
+                    <!-- Weather (WeatherLine), shown when show_weather is on: icon, temperature, today's high and low. -->
+                    <TextView
+                        android:id="@+id/weather"
+                        android:gravity="right"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:singleLine="true"
+                        android:ellipsize="end"
+                        android:textColor="#E6FFFFFF"
+                        android:textSize="17sp"
+                        android:fontFamily="@string/font_regular"
                         android:includeFontPadding="false"
                         android:visibility="gone" />
 
@@ -336,25 +454,6 @@
                 android:focusable="false"
                 android:visibility="gone" />
 
-            <!-- Shown only when show_ticker is on: index quotes from MarketTicker. Below stats, or below the clock
-                 block when stats is gone. -->
-            <TextView
-                android:id="@+id/ticker"
-                android:layout_width="wrap_content"
-                android:layout_below="@id/stats"
-                android:layout_alignStart="@id/leftBlock"
-                android:gravity="right"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:singleLine="true"
-                android:ellipsize="end"
-                android:textColor="#E6FFFFFF"
-                android:textSize="16sp"
-                android:fontFamily="@string/font_medium"
-                android:letterSpacing="0.04"
-                android:focusable="false"
-                android:visibility="gone" />
-
             <LinearLayout
                 android:id="@+id/topButtons"
                 android:layout_width="wrap_content"
@@ -365,6 +464,24 @@
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:orientation="horizontal">
+
+                <!-- Opens CalendarActivity; shown when show_agenda is on. -->
+                <TextView
+                    android:id="@+id/btnCalendar"
+                    style="@style/TopButton"
+                    android:visibility="gone"
+                    android:text="@string/calendar"
+                    android:drawableStart="@drawable/ic_calendar"
+                    android:nextFocusDown="@+id/grid" />
+
+                <!-- Shows and hides Home's subscriptions card; shown when show_subscriptions is on. -->
+                <TextView
+                    android:id="@+id/btnSubscriptions"
+                    style="@style/TopButton"
+                    android:visibility="gone"
+                    android:text="@string/subscriptions"
+                    android:drawableStart="@drawable/ic_subscriptions"
+                    android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnSettings"
@@ -439,6 +556,33 @@
     </LinearLayout>
 
     <!-- The single floating glass highlight that springs between tiles. -->
+    <!-- Subscriptions (Subscriptions, config.xml show_subscriptions): days until each one expires. Hidden until
+         the top bar's subscriptions button is pressed; then MainActivity drops it down just below that button, over
+         the other cards. OK opens SubscriptionsActivity; moving focus off it hides it again. -->
+    <TextView
+        android:id="@+id/subscriptionsCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:background="@drawable/widget_card_focus"
+        android:elevation="12dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:minWidth="260dp"
+        android:maxWidth="400dp"
+        android:maxLines="8"
+        android:ellipsize="end"
+        android:gravity="start"
+        android:lineSpacingExtra="3dp"
+        android:textColor="#F2FFFFFF"
+        android:textSize="13sp"
+        android:fontFamily="@string/font_regular"
+        android:focusable="true"
+        android:clickable="true"
+        android:visibility="gone" />
+
     <com.gathin.tvhome.GlassView
         android:id="@+id/glass"
         android:layout_width="10dp"

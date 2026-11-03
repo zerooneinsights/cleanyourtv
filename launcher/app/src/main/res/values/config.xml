@@ -267,7 +267,9 @@
     <!-- A name after the greeting: "Mr. Trịnh" shows GOOD MORNING, MR. TRỊNH. Empty: the greeting alone. -->
     <string name="greeting_name" translatable="false"></string>
     <!-- The greeting above the clock ("Good evening"). false hides it. Can also be set with "show_greeting" in a theme. -->
-    <bool name="show_greeting">true</bool>
+    <bool name="show_greeting">false</bool>
+    <!-- The date beside the clock ("Tuesday 3 November"). false hides it; the weather line stays. -->
+    <bool name="show_date">false</bool>
     <!-- The date and the line between the clock and the date in the clock's full white instead of dimmed. Can also be
          set with "header_white" in a theme. -->
     <bool name="header_white">false</bool>
@@ -296,13 +298,13 @@
     <!-- The dock band as light frosted glass, like the Inputs, Wi-Fi and Settings pills, so a sky or wallpaper shows
          through it. false (the default) keeps the solid near-black band, or the cinematic shelf's dark glass. Can
          also be set with "dock_glass": true in a theme's config.json. -->
-    <bool name="dock_glass">false</bool>
+    <bool name="dock_glass">true</bool>
     <!-- Draw the dock band and its edge. false leaves the tiles floating on the wallpaper (config.xml dock_band). -->
     <bool name="dock_band">true</bool>
     <!-- Every app in one row: the dock apps first, the rest after them, and the row scrolls sideways when focus
          reaches its edge. No grid below; rows_below_dock is ignored. Needs dock_row. Can also be set with
          "single_row" in a theme. -->
-    <bool name="single_row">false</bool>
+    <bool name="single_row">true</bool>
     <!-- With single_row, the band runs behind every app in the row, apps installed later included, instead of
          the dock apps only. Can also be set with "dock_band_all" in a theme. -->
     <bool name="dock_band_all">false</bool>
@@ -315,9 +317,9 @@
     <bool name="reorder_button">false</bool>
     <!-- Wi-Fi and Settings as round icon-only buttons (the network name moves to the talkback description);
          Inputs keeps its label. -->
-    <bool name="icon_only_buttons">false</bool>
+    <bool name="icon_only_buttons">true</bool>
     <!-- The Inputs pill as a round icon button too (the label moves to the talkback description). -->
-    <bool name="icon_only_inputs">false</bool>
+    <bool name="icon_only_inputs">true</bool>
     <!-- With vpn_pill, the VPN pill as a round icon button too: an open lock on the plain glass button while no VPN is
          up, the closed lock in a green outline while one is (solid green only while focused, like the pill). "VPN" /
          "VPN off" become its talkback description. A theme can set "icon_only_vpn": true. -->
@@ -393,11 +395,11 @@
 
     <!-- The focused dock app's name in large type above the dock. false keeps only the glow, which leaves room
          for bigger tiles when rows_below_dock is 2 or 3. -->
-    <bool name="dock_title">true</bool>
+    <bool name="dock_title">false</bool>
 
     <!-- Tiles per row in the grid; the dock always has this many slots. Tiles are 180dp wide at 4 columns and
          shrink to fit from 5 up (about 144dp at 5, 117dp at 6 on a 1080p TV). -->
-    <integer name="columns">4</integer>
+    <integer name="columns">7</integer>
 
     <!-- Basic motion is on; advanced effects are opt-in in the launcher's own Settings screen. -->
     <bool name="animations">true</bool>
@@ -465,6 +467,37 @@
     <!-- A small clock in the top-right corner over every app, hidden on Home (OverlayClockService). Needs the
          overlay app-op once: tools/tv.py 'appops set com.gathin.tvhome SYSTEM_ALERT_WINDOW allow'. -->
     <bool name="show_overlay_clock">true</bool>
+
+    <!-- A live score card under the ticker while a followed cricket match is in progress (CricketCard), from ESPN's
+         public scoreboard. A match is followed when a side's name is in cricket_teams (exact, so "India" is not
+         "India A") or its league's name is in cricket_leagues. -->
+    <bool name="show_cricket">true</bool>
+
+    <!-- Today's and tomorrow's events on the right of Home (AgendaPanel), from the Google calendars the TV syncs.
+         Needs READ_CALENDAR once: tools/tv.py 'pm grant com.gathin.tvhome android.permission.READ_CALENDAR'. -->
+    <bool name="show_agenda">true</bool>
+
+    <!-- The subscriptions card under the ticker: days until each app subscription expires, edited on the TV
+         (Subscriptions, SubscriptionsActivity). Hidden until the top bar's subscriptions button shows it. -->
+    <bool name="show_subscriptions">true</bool>
+    <string name="calendar" translatable="false">Calendar</string>
+    <string name="subscriptions" translatable="false">Subscriptions</string>
+
+    <!-- The weather beside the clock (WeatherLine), from Open-Meteo: no account or key. Set the place by its
+         latitude and longitude (central Pune by default); weather_place is the name shown at the end, empty for none.
+         weather.latitude, weather.longitude and weather.place in launcher/local.properties (never committed) override
+         these, so a home address stays off GitHub. -->
+    <bool name="show_weather">true</bool>
+    <string name="weather_latitude" translatable="false">18.5204</string>
+    <string name="weather_longitude" translatable="false">73.8567</string>
+    <string name="weather_place" translatable="false">Pune</string>
+    <string-array name="cricket_teams" translatable="false">
+        <item>India</item>
+    </string-array>
+    <string-array name="cricket_leagues" translatable="false">
+        <item>Indian Premier League</item>
+        <item>Women\'s Premier League</item>
+    </string-array>
     <integer name="overlay_clock_sp">12</integer>
     <string-array name="ticker_symbols" translatable="false">
         <item>^NSEI|NIFTY 50</item>
