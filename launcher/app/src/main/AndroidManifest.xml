@@ -16,6 +16,10 @@
     <!-- Only for the optional calendar panel (config.xml show_agenda): reads the Google calendars the TV syncs.
          Never requested at runtime: granted with pm grant over ADB. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Sets the TV's background calendar sync to every hour (AgendaPanel); it is once a day out of the box. -->
+    <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
+    <!-- Lets a manual calendar refresh wait until Google's calendar sync has finished (AgendaPanel.syncBusy). -->
+    <uses-permission android:name="android.permission.READ_SYNC_STATS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />

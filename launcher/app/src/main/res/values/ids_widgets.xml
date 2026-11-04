@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- View tag on each top-bar drop-down card (MainActivity.wireDropDown): the Runnable that closes it. -->
+    <item type="id" name="drop_down_hide" />
+</resources>

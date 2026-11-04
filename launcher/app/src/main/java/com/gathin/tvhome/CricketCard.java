@@ -41,6 +41,12 @@ final class CricketCard {
     private final List<String> leagues;
     private HandlerThread thread;
     private volatile Handler bg;
+    /** Told on the main thread after each read whether a followed match is live (the scorecard button's colour). */
+    private java.util.function.Consumer<Boolean> liveListener;
+
+    void setLiveListener(java.util.function.Consumer<Boolean> listener) {
+        liveListener = listener;
+    }
 
     CricketCard(TextView view, Handler main, String[] teams, String[] leagues) {
         this.view = view;
@@ -66,6 +72,7 @@ final class CricketCard {
                         if (bg != h) return;
                         view.setVisibility(text == null ? View.GONE : View.VISIBLE);
                         if (text != null) view.setText(text);
+                        if (liveListener != null) liveListener.accept(text != null);
                     });
                 }
                 if (bg == h) h.postDelayed(this, live == null ? RETRY_MS : live.isEmpty() ? IDLE_MS : LIVE_MS);

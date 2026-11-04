@@ -39,6 +39,10 @@ public final class CalendarActivity extends Activity {
     private TextView prevYear, nextYear, prevMonth, nextMonth;
     private Typeface regular, medium;
     private YearMonth loadedMonth;
+    private LocalDate shown = LocalDate.now();
+    private TextView refresh;
+    private boolean refreshing;
+    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
     private List<CalendarData.Event> events = Collections.emptyList();
 
     @Override
@@ -58,7 +62,9 @@ public final class CalendarActivity extends Activity {
 
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
-        root.addView(left, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+        // A fixed width that holds the whole year/month header ("« 2025 ‹ Oct November 2026 Dec › 2027 »"): left
+        // to wrap its content, the column came out narrower than the header and cut its last button.
+        root.addView(left, new LinearLayout.LayoutParams(dp(480),
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout header = new LinearLayout(this);
@@ -69,7 +75,7 @@ public final class CalendarActivity extends Activity {
         prevMonth = button("‹");
         title = text(22, medium, 0xFFFFFFFF);
         title.setGravity(Gravity.CENTER);
-        title.setMinWidth(dp(190));
+        title.setMinWidth(dp(150));
         nextMonth = button("›");
         nextYear = button("»");
         TextView today = button("Today");
@@ -78,10 +84,7 @@ public final class CalendarActivity extends Activity {
         header.addView(title);
         header.addView(nextMonth);
         header.addView(nextYear);
-        LinearLayout.LayoutParams todayLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        todayLp.setMarginStart(dp(16));
-        header.addView(today, todayLp);
+        refresh = button("↻ Refresh");
 
         grid = new MonthGridView(this);
         grid.setCellSize(dp(50));
@@ -91,6 +94,7 @@ public final class CalendarActivity extends Activity {
         left.addView(grid, gridLp);
         TextView hint = text(12, regular, 0x66FFFFFF);
         hint.setText("Arrows move the day  ·  Up from the first week reaches the buttons  ·  Back closes");
+        hint.setSingleLine(false);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         hintLp.topMargin = dp(8);
@@ -99,10 +103,19 @@ public final class CalendarActivity extends Activity {
         LinearLayout right = new LinearLayout(this);
         right.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams rightLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-        rightLp.setMarginStart(dp(56));
+        rightLp.setMarginStart(dp(40));
         root.addView(right, rightLp);
+        // Today and Refresh above the day's events: in the header row they ran past the left column's edge.
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.addView(today);
+        actions.addView(refresh);
+        right.addView(actions);
         dayTitle = text(24, medium, 0xFFFFFFFF);
-        right.addView(dayTitle);
+        LinearLayout.LayoutParams dayLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        dayLp.topMargin = dp(20);
+        right.addView(dayTitle, dayLp);
         dayEvents = text(18, regular, 0xE6FFFFFF);
         dayEvents.setLineSpacing(dp(8), 1f);
         LinearLayout.LayoutParams eventsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -116,9 +129,12 @@ public final class CalendarActivity extends Activity {
         prevMonth.setOnClickListener(v -> grid.select(grid.month().minusMonths(1).atDay(clampDay(-1))));
         nextMonth.setOnClickListener(v -> grid.select(grid.month().plusMonths(1).atDay(clampDay(1))));
         today.setOnClickListener(v -> grid.select(LocalDate.now()));
+        refresh.setOnClickListener(v -> refresh());
         // Down from any header button goes back to the grid; Up from the grid's first week lands on "next month".
         grid.setId(View.generateViewId());
-        for (View b : new View[]{prevYear, prevMonth, nextMonth, nextYear, today}) b.setNextFocusDownId(grid.getId());
+        for (View b : new View[]{prevYear, prevMonth, nextMonth, nextYear, today, refresh}) {
+            b.setNextFocusDownId(grid.getId());
+        }
         grid.setNextFocusUpId(nextMonth.getId());
 
         grid.setInteractive(LocalDate.now(), this::show);
@@ -134,7 +150,32 @@ public final class CalendarActivity extends Activity {
         return Math.min(selectedDay, grid.month().plusMonths(offset).lengthOfMonth());
     }
 
+    /** Syncs now and, once Google's calendar sync is done (or after 30 seconds), reloads the month on screen. */
+    private void refresh() {
+        if (refreshing) return;
+        refreshing = true;
+        refresh.setText("↻ Syncing…");
+        AgendaPanel.requestSync(this);
+        long until = android.os.SystemClock.elapsedRealtime() + 30_000L;
+        ui.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (isFinishing()) return;
+                if (AgendaPanel.syncBusy(CalendarActivity.this)
+                        && android.os.SystemClock.elapsedRealtime() < until) {
+                    ui.postDelayed(this, 1_500L);
+                    return;
+                }
+                refreshing = false;
+                refresh.setText("↻ Refresh");
+                loadedMonth = null;   // read the month again
+                show(shown);
+            }
+        }, 1_500L);
+    }
+
     private void show(LocalDate day) {
+        shown = day;
         selectedDay = day.getDayOfMonth();
         YearMonth month = YearMonth.from(day);
         ZoneId zone = ZoneId.systemDefault();

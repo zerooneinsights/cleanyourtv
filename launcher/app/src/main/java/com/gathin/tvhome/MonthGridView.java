@@ -71,6 +71,7 @@ public final class MonthGridView extends View {
         this.month = month;
         this.today = today;
         this.eventDays = eventDays == null ? Collections.emptySet() : eventDays;
+        requestLayout();
         invalidate();
     }
 
@@ -91,13 +92,19 @@ public final class MonthGridView extends View {
     void select(LocalDate day) {
         selected = day;
         month = YearMonth.from(day);
+        requestLayout();
         invalidate();
         if (listener != null) listener.onSelected(day);
     }
 
+    /** Week rows this month needs: 4 to 6, so a short month leaves no empty row at the bottom. */
+    private int weeks() {
+        return (column(month.atDay(1).getDayOfWeek()) + month.lengthOfMonth() + 6) / 7;
+    }
+
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
-        setMeasuredDimension(Math.round(cell * 7), Math.round(cell * 0.8f + cell * 6));
+        setMeasuredDimension(Math.round(cell * 7), Math.round(cell * 0.8f + cell * weeks()));
     }
 
     @Override

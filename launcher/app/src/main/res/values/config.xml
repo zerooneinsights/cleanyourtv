@@ -331,11 +331,11 @@
     <!-- true colours the Wi-Fi pill's icon green while the TV is online and leaves it white while it is not (dark on
          the focused pill either way), so the connection shows at a glance, also as an icon-only button. Can also be
          set with "wifi_status_color": true in a theme's config.json. -->
-    <bool name="wifi_status_color">false</bool>
+    <bool name="wifi_status_color">true</bool>
     <!-- With wifi_status_color: the icon orange while the TV is connected but Android has not reached the internet
          through it (a hotel or holiday-park Wi-Fi waiting for its login page) and red while it is offline, instead
          of white for both. Can also be set with "wifi_status_warnings": true in a theme's config.json. -->
-    <bool name="wifi_status_warnings">false</bool>
+    <bool name="wifi_status_warnings">true</bool>
     <!-- The app library as a round button in the top bar, beside Settings (app_library must be on too). -->
     <bool name="library_button">false</bool>
     <!-- The App library pill after the last Home row. false hides it while library_button is on, so the top-bar
@@ -355,7 +355,7 @@
     </string-array>
     <!-- The Inputs pill in the top bar, shown when the TV has inputs to list. false hides it for good; what the
          remote's Input button does is unchanged. Can also be set with "show_inputs_pill" in a theme. -->
-    <bool name="show_inputs_pill">true</bool>
+    <bool name="show_inputs_pill">false</bool>
     <!-- The Inputs list shows only HDMI ports and CEC devices that report connected. Empty ports, devices asleep in
          standby (some TVs, TCL among them, report an empty HDMI port as connected-standby, the same state a
          sleeping device has) and the AV jacks fold behind a "More inputs" row that expands the rest. An HDMI row
@@ -399,7 +399,7 @@
 
     <!-- Tiles per row in the grid; the dock always has this many slots. Tiles are 180dp wide at 4 columns and
          shrink to fit from 5 up (about 144dp at 5, 117dp at 6 on a 1080p TV). -->
-    <integer name="columns">7</integer>
+    <integer name="columns">8</integer>
 
     <!-- Basic motion is on; advanced effects are opt-in in the launcher's own Settings screen. -->
     <bool name="animations">true</bool>
@@ -480,8 +480,33 @@
     <!-- The subscriptions card under the ticker: days until each app subscription expires, edited on the TV
          (Subscriptions, SubscriptionsActivity). Hidden until the top bar's subscriptions button shows it. -->
     <bool name="show_subscriptions">true</bool>
+
+    <!-- A scorecard button first in the top bar: it drops down the detailed scorecard of the followed cricket match
+         (cricket_teams / cricket_leagues), live, else the latest finished, else the next (CricketScorecard). -->
+    <bool name="show_scorecard">true</bool>
+
+    <!-- The returns card under the calendar (ReturnsCard): each symbol's total return over each period, from Yahoo
+         Finance daily closes. Items are "Yahoo symbol|label"; Gold and Silver are Nippon India's Gold BeES and
+         Silver BeES ETFs, so those returns are in rupees; LRCX (Lam Research, Nasdaq) is in US dollars. Periods: a number and D, W, M or Y ("1D", "52W"). -->
+    <bool name="show_returns">true</bool>
+    <string-array name="returns_symbols" translatable="false">
+        <item>^NSEI|Nifty 50</item>
+        <item>NIFTYMIDCAP150.NS|Midcap 150</item>
+        <item>GOLDBEES.NS|Gold</item>
+        <item>SILVERBEES.NS|Silver</item>
+        <item>LRCX|LRCX</item>
+    </string-array>
+    <string-array name="returns_periods" translatable="false">
+        <item>1D</item>
+        <item>1W</item>
+        <item>1M</item>
+        <item>3M</item>
+        <item>6M</item>
+        <item>52W</item>
+    </string-array>
     <string name="calendar" translatable="false">Calendar</string>
     <string name="subscriptions" translatable="false">Subscriptions</string>
+    <string name="scorecard" translatable="false">Scorecard</string>
 
     <!-- The weather beside the clock (WeatherLine), from Open-Meteo: no account or key. Set the place by its
          latitude and longitude (central Pune by default); weather_place is the name shown at the end, empty for none.
