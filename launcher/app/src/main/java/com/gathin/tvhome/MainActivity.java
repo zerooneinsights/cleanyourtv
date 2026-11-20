@@ -221,6 +221,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** config.xml show_scorecard: the scorecard drop-down and what fills it. Null when off. */
     private View scorecardCard;
     private CricketScorecard scorecard;
+    /** The subscriptions button, red while a subscription is due within Subscriptions.DUE_SOON_DAYS. */
+    private TextView btnSubscriptions;
+    private ColorStateList subscriptionsPlainTint;
     /** Set while the subscriptions editor is opening, so the card is still there when it closes. */
     private boolean editingSubscriptions;
     /** config.xml show_weather: the weather line beside the clock. Null when off. */
@@ -979,8 +982,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnLibraryTop.setOnKeyListener(pillKeys);
         if (getResources().getBoolean(R.bool.show_subscriptions)) {
             subscriptionsCard = findViewById(R.id.subscriptionsCard);
-            wireDropDown(findViewById(R.id.btnSubscriptions), subscriptionsCard, pillKeys,
+            btnSubscriptions = findViewById(R.id.btnSubscriptions);
+            wireDropDown(btnSubscriptions, subscriptionsCard, pillKeys,
                     () -> subscriptionsCard.setText(Subscriptions.card(this)), () -> { });
+            subscriptionsPlainTint = btnSubscriptions.getCompoundDrawableTintList();
             subscriptionsCard.setOnClickListener(v -> {
                 editingSubscriptions = true;
                 startActivity(new Intent(this, SubscriptionsActivity.class));
@@ -1248,7 +1253,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (cricket != null) cricket.start();
         if (weather != null) weather.start();
         if (returns != null) returns.start();
-        if (subscriptionsCard != null) subscriptionsCard.setText(Subscriptions.card(this));   // back from editing
+        if (subscriptionsCard != null) {
+            subscriptionsCard.setText(Subscriptions.card(this));   // back from editing
+            // Red while anything is due within the next few days (or already past due); its usual colour otherwise.
+            btnSubscriptions.setCompoundDrawableTintList(Subscriptions.dueSoon(this)
+                    ? new ColorStateList(new int[][]{{android.R.attr.state_focused}, {}}, new int[]{0xFF111111, 0xFFFF453A})
+                    : subscriptionsPlainTint);
+        }
         if (gameDay != null) gameDay.start();
         sky.update();
         wallpaperPlayer.start();

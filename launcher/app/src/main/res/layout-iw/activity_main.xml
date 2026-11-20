@@ -208,20 +208,6 @@
                     android:textSize="13sp"
                     android:fontFamily="@string/font_regular" />
 
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1" />
-
-                <!-- "Updated 11:05", or "Syncing…" during a manual refresh (OK on this card). -->
-                <TextView
-                    android:id="@+id/calendarStatus"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:textColor="#66FFFFFF"
-                    android:textSize="6sp"
-                    android:fontFamily="@string/font_regular" />
             </LinearLayout>
 
             <LinearLayout
@@ -244,6 +230,17 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp" />
+
+                <!-- "Updated 11:05", or "Syncing…" during a manual refresh (OK on this card), under the month. -->
+                <TextView
+                    android:id="@+id/calendarStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:gravity="end"
+                    android:textColor="#66FFFFFF"
+                    android:textSize="6sp"
+                    android:fontFamily="@string/font_regular" />
             </LinearLayout>
         </LinearLayout>
 

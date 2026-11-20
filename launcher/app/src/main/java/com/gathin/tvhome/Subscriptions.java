@@ -69,6 +69,14 @@ final class Subscriptions {
         ctx.getSharedPreferences("subscriptions", Context.MODE_PRIVATE).edit().putString("items", a.toString()).apply();
     }
 
+    /** The subscriptions button turns red when one is due within this many days, or is past due. */
+    static final int DUE_SOON_DAYS = 5;
+
+    static boolean dueSoon(Context ctx) {
+        for (Item it : load(ctx)) if (daysLeft(it) <= DUE_SOON_DAYS) return true;
+        return false;
+    }
+
     static long daysLeft(Item it) {
         return ChronoUnit.DAYS.between(LocalDate.now(), it.expires);
     }
