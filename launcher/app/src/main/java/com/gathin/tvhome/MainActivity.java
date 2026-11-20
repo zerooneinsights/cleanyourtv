@@ -215,6 +215,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private AgendaPanel agenda;
     /** config.xml show_cricket: live score card for followed matches. Null when off. */
     private CricketCard cricket;
+    /** config.xml show_news: the local news card. Null when off. */
+    private NewsCard news;
     /** config.xml show_returns: the returns card under the calendar. Null when off. */
     private ReturnsCard returns;
     /** config.xml show_subscriptions: the subscriptions card, refreshed on every resume. Null when off. */
@@ -614,6 +616,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     getString(local ? R.string.weather_latitude_local : R.string.weather_latitude),
                     getString(local ? R.string.weather_longitude_local : R.string.weather_longitude),
                     getString(local ? R.string.weather_place_local : R.string.weather_place));
+        }
+        if (getResources().getBoolean(R.bool.show_news)) {
+            // launcher/local.properties' news.places (built in as news_places_local) wins over config.xml's.
+            String places = getString(R.string.news_places_local);
+            news = new NewsCard(findViewById(R.id.newsCard), handler,
+                    places.isEmpty() ? getString(R.string.news_places) : places,
+                    getResources().getStringArray(R.array.news_exclude));
         }
         if (getResources().getBoolean(R.bool.show_returns)) {
             returns = new ReturnsCard(findViewById(R.id.returnsCard), handler,
@@ -1261,6 +1270,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (cricket != null) cricket.start();
         if (weather != null) weather.start();
         if (returns != null) returns.start();
+        if (news != null) news.start();
         if (subscriptionsCard != null) {
             subscriptionsCard.setText(Subscriptions.card(this));   // back from editing
             // Red while anything is due within the next few days (or already past due); its usual colour otherwise.
@@ -1466,6 +1476,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (cricket != null) cricket.stop();
         if (weather != null) weather.stop();
         if (returns != null) returns.stop();
+        if (news != null) news.stop();
         if (gameDay != null) gameDay.stop();
         handler.removeCallbacks(turnTick);
         if (lamp != null) lamp.stop();

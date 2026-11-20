@@ -149,27 +149,26 @@ final class CricketCard {
         s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         s.setSpan(new RelativeSizeSpan(0.8f), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
+        // The scores on one line with the sides' short names ("NZ 368  ·  IND 159/1 (39 ov)"). The match situation
+        // and the full scorecard are the top bar's scorecard drop-down; two lines leave room for the news card.
         JSONArray comps = event.optJSONArray("competitors");
+        s.append('\n');
         for (int i = 0; comps != null && i < comps.length(); i++) {
             JSONObject team = comps.optJSONObject(i);
             String score = team.optString("score");
-            s.append('\n').append(team.optString("displayName")).append("   ");
+            String name = team.optString("abbreviation", "");
+            if (name.isEmpty()) name = team.optString("displayName");
+            if (i > 0) s.append("  ·  ");
+            s.append(name).append(' ');
             start = s.length();
-            s.append(score.isEmpty() ? "Yet to bat" : score);
+            s.append(score.isEmpty() ? "yet to bat" : score);
             if (score.isEmpty()) {
                 s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
         }
-        JSONObject full = event.optJSONObject("fullStatus");
-        String note = full == null ? "" : full.optString("longSummary", full.optString("summary"));
-        if (!note.isEmpty()) {
-            start = s.length();
-            s.append('\n').append(note);
-            s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        }
         if (live.size() > 1) {
             start = s.length();
-            s.append("\n+").append(String.valueOf(live.size() - 1)).append(" more live");
+            s.append("   +").append(String.valueOf(live.size() - 1)).append(" more");
             s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         return s;

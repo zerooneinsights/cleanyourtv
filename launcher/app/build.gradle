@@ -19,10 +19,12 @@ android {
         // values leave config.xml's in charge.
         def localProps = new Properties()
         def localFile = rootProject.file('local.properties')
-        if (localFile.exists()) localFile.withInputStream { localProps.load(it) }
+        // UTF-8, so a place written in Devanagari (news.places) survives.
+        if (localFile.exists()) localFile.withReader('UTF-8') { localProps.load(it) }
         resValue 'string', 'weather_latitude_local', localProps.getProperty('weather.latitude', '')
         resValue 'string', 'weather_longitude_local', localProps.getProperty('weather.longitude', '')
         resValue 'string', 'weather_place_local', localProps.getProperty('weather.place', '')
+        resValue 'string', 'news_places_local', localProps.getProperty('news.places', '')
     }
 
     buildTypes {

@@ -514,6 +514,20 @@
          Finance daily closes. Items are "Yahoo symbol|label"; Gold and Silver are Nippon India's Gold BeES and
          Silver BeES ETFs, so those returns are in rupees; LRCX (Lam Research, Nasdaq) is in US dollars. Periods: a number and D, W, M or Y ("1D", "52W"). -->
     <bool name="show_returns">true</bool>
+
+    <!-- The local news card under the ticker (NewsCard), from Google News. Places are "Label|search|en or hi|keywords"
+         separated by ";": a headline counts only when its title has one of the comma-separated keywords. news.places in
+         launcher/local.properties (never committed) replaces news_places, so home towns stay off GitHub. Titles with
+         any news_exclude phrase are dropped. -->
+    <bool name="show_news">true</bool>
+    <string name="news_places" translatable="false">Pune|Pune|en|Pune,PCMC,Pimpri</string>
+    <string-array name="news_exclude" translatable="false">
+        <item>Gold Rate</item>
+        <item>Silver Rate</item>
+        <item>Weather Forecast</item>
+        <item>On Road Price</item>
+        <item>Petrol Price</item>
+    </string-array>
     <string-array name="returns_symbols" translatable="false">
         <item>^NSEI|Nifty 50</item>
         <item>NIFTYMIDCAP150.NS|Midcap 150</item>
