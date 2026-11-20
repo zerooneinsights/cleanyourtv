@@ -20,8 +20,8 @@ import java.util.Locale;
 
 /**
  * config.xml show_commute: two lines above the ticker, like the weather, with the drive time each way between two
- * places in today's traffic, e.g. "Home → Office  48 min · +14 min traffic · reach 9:48 AM · via Baner Rd" and
- * "Office → Home ...", the time green, amber or red by how much traffic adds; the arrival time is redrawn every minute. Either from the owner's own Google Apps Script (Google Maps traffic
+ * places in today's traffic, e.g. "To Office  48 min · +14 min traffic · reach 9:48 AM · best 8:30 AM (36 min)" and
+ * "To Home ...", the time green, amber or red by how much traffic adds; the arrival time is redrawn every minute. Either from the owner's own Google Apps Script (Google Maps traffic
  * under their Google account, commute.url: the script's /exec link, answering {"minutes","trafficMinutes","km","via",
  * "back":{the same for the return trip}}) or from TomTom's routing API with their own free key (commute.key,
  * commute.from and commute.to as "lat,lon"); all in launcher/local.properties, never committed. With neither the lines
@@ -221,7 +221,7 @@ final class CommuteLine {
         }
     }
 
-    /** "Home → Office  42 min · reach 1:34 PM · via Baner Rd", the time coloured by how much traffic adds. */
+    /** "To Office  42 min · reach 1:34 PM · best 8:30 AM (36 min)", the time coloured by how much traffic adds. */
     private static CharSequence line(Trip t) {
         // Green while traffic adds under a tenth, amber under a third, red beyond.
         float share = t.minutes <= t.delay ? 1f : t.delay / (float) (t.minutes - t.delay);
@@ -253,11 +253,7 @@ final class CommuteLine {
             if (t.bestMinutes > 0) s.append(" (").append(formatMinutes(t.bestMinutes)).append(")");
             s.setSpan(new ForegroundColorSpan(GREEN), start + 3, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
-        if (!t.via.isEmpty()) {
-            start = s.length();
-            s.append(" · via ").append(t.via);
-            s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        }
+        // The road is on the second page's commute card; Home keeps the line short.
         return s;
     }
 
