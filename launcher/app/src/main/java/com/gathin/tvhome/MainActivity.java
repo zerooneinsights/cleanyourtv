@@ -215,6 +215,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private AgendaPanel agenda;
     /** config.xml show_cricket: live score card for followed matches. Null when off. */
     private CricketCard cricket;
+    /** config.xml show_commute: the commute line above the ticker. Null when off. */
+    private CommuteLine commute;
+    /** The second page under Home (Down from the app row): detail cards, the full commute first. */
+    private MorePage morePage;
     /** config.xml show_news: the local news card. Null when off. */
     private NewsCard news;
     /** config.xml show_returns: the returns card under the calendar. Null when off. */
@@ -617,12 +621,33 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     getString(local ? R.string.weather_longitude_local : R.string.weather_longitude),
                     getString(local ? R.string.weather_place_local : R.string.weather_place));
         }
+        if (getResources().getBoolean(R.bool.show_commute)) {
+            commute = new CommuteLine(findViewById(R.id.commute), findViewById(R.id.commuteBack), handler, getString(R.string.commute_url_local),
+                    getString(R.string.commute_key_local),
+                    getString(R.string.commute_from_local), getString(R.string.commute_to_local),
+                    getString(R.string.commute_label), getString(R.string.commute_label_back));
+            ViewGroup root = findViewById(R.id.root);
+            List<View> homeViews = new ArrayList<>();
+            List<Integer> fixed = Arrays.asList(R.id.sky, R.id.heroArt, R.id.ambient, R.id.heroScrim, R.id.glass,
+                    R.id.morePage);
+            for (int i = 0; i < root.getChildCount(); i++) {
+                View child = root.getChildAt(i);
+                if (!fixed.contains(child.getId())) homeViews.add(child);
+            }
+            morePage = new MorePage(findViewById(R.id.morePage), homeViews, findViewById(R.id.glass),
+                    () -> focusTile(singleRow ? lastFocused : lastFocused % COLUMNS));
+            commute.setDetailsListener(json -> morePage.showCommute(json, getString(R.string.commute_label),
+                    getString(R.string.commute_label_back)));
+        }
         if (getResources().getBoolean(R.bool.show_news)) {
             // launcher/local.properties' news.places (built in as news_places_local) wins over config.xml's.
             String places = getString(R.string.news_places_local);
             news = new NewsCard(findViewById(R.id.newsCard), handler,
                     places.isEmpty() ? getString(R.string.news_places) : places,
-                    getResources().getStringArray(R.array.news_exclude));
+                    getResources().getStringArray(R.array.news_exclude),
+                    () -> firstTopButton().requestFocus(),                          // Up from the city tabs
+                    () -> focusTile(singleRow ? lastFocused : lastFocused % COLUMNS)); // Down, back to the apps
+            if (morePage != null) news.setFullListener(morePage::showNews);   // every headline, on the second page
         }
         if (getResources().getBoolean(R.bool.show_returns)) {
             returns = new ReturnsCard(findViewById(R.id.returnsCard), handler,
@@ -1271,6 +1296,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (weather != null) weather.start();
         if (returns != null) returns.start();
         if (news != null) news.start();
+        if (commute != null) commute.start();
         if (subscriptionsCard != null) {
             subscriptionsCard.setText(Subscriptions.card(this));   // back from editing
             // Red while anything is due within the next few days (or already past due); its usual colour otherwise.
@@ -1477,6 +1503,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (weather != null) weather.stop();
         if (returns != null) returns.stop();
         if (news != null) news.stop();
+        if (commute != null) commute.stop();
+        if (morePage != null) morePage.close(false);
         if (gameDay != null) gameDay.stop();
         handler.removeCallbacks(turnTick);
         if (lamp != null) lamp.stop();
@@ -1613,6 +1641,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 }
                 return true;
             }
+        }
+        // Down on the app row: the page of details below Home.
+        if (morePage != null && !morePage.isOpen() && !reordering && openPopup == null && cardPrompt == null
+                && event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN
+                && singleRow && focusedTilePosition() >= 0) {
+            morePage.open();
+            return true;
         }
         if (!reordering) return super.dispatchKeyEvent(event);
         if (dockEditing) return dispatchDockEdit(event);

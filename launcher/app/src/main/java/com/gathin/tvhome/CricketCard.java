@@ -132,33 +132,23 @@ final class CricketCard {
         return false;
     }
 
-    /** The first followed match in full; any others as a "+N more live" line, so the card stays above the shelf. */
+    /**
+     * The first followed match on one line, like the weather: "● LIVE  NZ 368 · IND 159/1 (39 ov) · 1st Test · Stumps",
+     * with "+N more" when several are live. The full scorecard is the top bar's scorecard drop-down.
+     */
     private static CharSequence format(List<JSONObject[]> live) {
-        JSONObject league = live.get(0)[0], event = live.get(0)[1];
+        JSONObject event = live.get(0)[1];
         SpannableStringBuilder s = new SpannableStringBuilder();
         int start = s.length();
-        s.append("● LIVE");
+        s.append("● LIVE  ");
         s.setSpan(new ForegroundColorSpan(LIVE), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        start = s.length();
-        String title = event.optString("title");
-        String abbr = league.optString("abbreviation");
-        s.append("   ").append(abbr.isEmpty() ? league.optString("name") : abbr);
-        if (!title.isEmpty()) s.append(" · ").append(title);
-        String state = event.optString("summary");
-        if (!state.isEmpty() && !"Live".equals(state)) s.append(" · ").append(state);
-        s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        s.setSpan(new RelativeSizeSpan(0.8f), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-        // The scores on one line with the sides' short names ("NZ 368  ·  IND 159/1 (39 ov)"). The match situation
-        // and the full scorecard are the top bar's scorecard drop-down; two lines leave room for the news card.
         JSONArray comps = event.optJSONArray("competitors");
-        s.append('\n');
         for (int i = 0; comps != null && i < comps.length(); i++) {
             JSONObject team = comps.optJSONObject(i);
             String score = team.optString("score");
             String name = team.optString("abbreviation", "");
             if (name.isEmpty()) name = team.optString("displayName");
-            if (i > 0) s.append("  ·  ");
+            if (i > 0) s.append(" · ");
             s.append(name).append(' ');
             start = s.length();
             s.append(score.isEmpty() ? "yet to bat" : score);
@@ -166,6 +156,12 @@ final class CricketCard {
                 s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
         }
+        start = s.length();
+        String title = event.optString("title");
+        if (!title.isEmpty()) s.append(" · ").append(title);
+        String state = event.optString("summary");
+        if (!state.isEmpty() && !"Live".equals(state)) s.append(" · ").append(state);
+        s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         if (live.size() > 1) {
             start = s.length();
             s.append("   +").append(String.valueOf(live.size() - 1)).append(" more");

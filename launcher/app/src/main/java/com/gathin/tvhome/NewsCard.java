@@ -1,12 +1,17 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -28,21 +33,25 @@ import java.util.Locale;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 /**
- * config.xml show_news: a card under the ticker with one row per place, each showing that place's latest local
- * headline, its source and age, and moving on to the next of its newest three every 20 seconds. From Google News'
- * search feeds (no account or key), read only while Home is resumed, every 30 minutes, 5 minutes after a failure.
+ * config.xml show_news: a card under the ticker with a tab per place and, under the tabs, the chosen place's newest
+ * local headlines with source and age. Up from the apps reaches the tabs, Left/Right moves between places (the
+ * headlines follow the focus), Down goes back to the apps; the last place chosen is remembered. From Google News'
+ * search feeds (no account or key): read on every return to Home and every 10 minutes while it stays up, 5 minutes
+ * after a failure.
  *
- * Places are "Label|search|en or hi|keyword,keyword" separated by ";" (news_places, or news.places in
+ * Places are "Label|search|en or hi|keyword,keyword" separated by ";" (a search starting with http is a local paper's own
+ * RSS feed, read whole) (news_places, or news.places in
  * launcher/local.properties, which is never committed): a headline counts only when its title has one of the
  * keywords, and titles with any news_exclude phrase ("Gold Rate", weather pages) are dropped.
  */
 final class NewsCard {
-    private static final long REFRESH_MS = 1_800_000L;
+    private static final long REFRESH_MS = 600_000L;
     private static final long RETRY_MS = 300_000L;
-    private static final long ROTATE_MS = 20_000L;
-    private static final int PER_PLACE = 3;
+    private static final int PER_PLACE = 5;
+    /** Kept per place for the full list on the second page; Home shows the first PER_PLACE. */
+    private static final int KEEP = 10;
     private static final int DIM = 0x99FFFFFF;
-    private static final int LABEL = 0xFF60A5FA;
+    private static final int TEXT = 0xF2FFFFFF;
 
     private static final class Place {
         String label, query, lang;
@@ -58,21 +67,17 @@ final class NewsCard {
     private final Handler main;
     private final List<Place> places = new ArrayList<>();
     private final String[] exclude;
-    private final TextView[] headlines, ages;
     private final List<List<Story>> stories = new ArrayList<>();
-    private int turn;
+    private final List<TextView> tabs = new ArrayList<>();
+    private final TextView[] headlines = new TextView[PER_PLACE];
+    private final TextView[] ages = new TextView[PER_PLACE];
+    private final SharedPreferences prefs;
+    private int selected;
     private HandlerThread thread;
     private volatile Handler bg;
-    private final Runnable rotate = new Runnable() {
-        @Override
-        public void run() {
-            turn++;
-            draw();
-            main.postDelayed(this, ROTATE_MS);
-        }
-    };
 
-    NewsCard(LinearLayout card, Handler main, String placesSpec, String[] exclude) {
+    /** onUp / onDown: where focus goes from the tabs (the top bar, the apps). */
+    NewsCard(LinearLayout card, Handler main, String placesSpec, String[] exclude, Runnable onUp, Runnable onDown) {
         this.card = card;
         this.main = main;
         this.exclude = exclude;
@@ -88,6 +93,10 @@ final class NewsCard {
             stories.add(new ArrayList<>());
         }
         Context ctx = card.getContext();
+        prefs = ctx.getSharedPreferences("news", Context.MODE_PRIVATE);
+        // The last place chosen, by name (so reordering places never mixes them up); the first place otherwise.
+        String last = prefs.getString("tab_label", "");
+        for (int i = 0; i < places.size(); i++) if (places.get(i).label.equals(last)) selected = i;
         float d = ctx.getResources().getDisplayMetrics().density;
         Typeface regular = null, medium = null;
         try {
@@ -96,20 +105,56 @@ final class NewsCard {
         } catch (RuntimeException ignored) {
             // The system font is fine.
         }
-        TextView heading = text(ctx, "LOCAL NEWS", 10, medium, DIM);
-        heading.setLetterSpacing(0.12f);
-        card.addView(heading);
-        headlines = new TextView[places.size()];
-        ages = new TextView[places.size()];
+
+        // The tabs: dim at rest, a soft pill when chosen, white with dark text when focused.
+        LinearLayout tabRow = new LinearLayout(ctx);
+        tabRow.setOrientation(LinearLayout.HORIZONTAL);
+        card.addView(tabRow);
         for (int i = 0; i < places.size(); i++) {
+            TextView tab = text(ctx, places.get(i).label, 12, medium, 0);
+            tab.setPadding(Math.round(12 * d), Math.round(5 * d), Math.round(12 * d), Math.round(5 * d));
+            tab.setFocusable(true);
+            tab.setTextColor(new ColorStateList(new int[][]{
+                    {android.R.attr.state_focused}, {android.R.attr.state_selected}, {}},
+                    new int[]{0xFF111111, 0xFFFFFFFF, DIM}));
+            StateListDrawable states = new StateListDrawable();
+            states.addState(new int[]{android.R.attr.state_focused}, pill(0xFFFFFFFF, d));
+            states.addState(new int[]{android.R.attr.state_selected}, pill(0x33FFFFFF, d));
+            states.addState(new int[]{}, pill(0x00000000, d));
+            tab.setBackground(states);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMarginEnd(Math.round(4 * d));
+            tabRow.addView(tab, lp);
+            int index = i;
+            tab.setOnFocusChangeListener((v, focused) -> { if (focused) select(index); });
+            tab.setOnKeyListener((v, keyCode, event) -> {
+                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+                switch (keyCode) {
+                    case KeyEvent.KEYCODE_DPAD_UP:
+                        onUp.run();
+                        return true;
+                    case KeyEvent.KEYCODE_DPAD_DOWN:
+                        onDown.run();
+                        return true;
+                    case KeyEvent.KEYCODE_DPAD_LEFT:
+                        return index == 0;                       // stay on the row at its ends
+                    case KeyEvent.KEYCODE_DPAD_RIGHT:
+                        return index == places.size() - 1;
+                    default:
+                        return false;
+                }
+            });
+            tabs.add(tab);
+        }
+
+        // The chosen place's headlines.
+        for (int i = 0; i < PER_PLACE; i++) {
             LinearLayout row = new LinearLayout(ctx);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(0, Math.round(4 * d), 0, 0);
-            TextView label = text(ctx, places.get(i).label.toUpperCase(Locale.getDefault()), 10, medium, LABEL);
-            label.setLetterSpacing(0.06f);
-            row.addView(label, new LinearLayout.LayoutParams(Math.round(92 * d), LinearLayout.LayoutParams.WRAP_CONTENT));
-            headlines[i] = text(ctx, "…", 12, regular, 0xF2FFFFFF);
+            row.setPadding(Math.round(4 * d), Math.round((i == 0 ? 8 : 5) * d), 0, 0);
+            headlines[i] = text(ctx, i == 0 ? "…" : "", 12, regular, TEXT);
             row.addView(headlines[i], new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             ages[i] = text(ctx, "", 10, regular, DIM);
             LinearLayout.LayoutParams ageLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -118,6 +163,21 @@ final class NewsCard {
             row.addView(ages[i], ageLp);
             card.addView(row);
         }
+        select(selected);
+    }
+
+    private static GradientDrawable pill(int color, float d) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(14 * d);
+        return g;
+    }
+
+    private void select(int index) {
+        selected = index;
+        for (int i = 0; i < tabs.size(); i++) tabs.get(i).setSelected(i == index);
+        prefs.edit().putString("tab_label", places.get(index).label).apply();
+        draw();
     }
 
     private static TextView text(Context ctx, String s, int sp, Typeface face, int color) {
@@ -154,18 +214,40 @@ final class NewsCard {
                     main.post(() -> {
                         if (bg != h) return;
                         stories.set(at, found);
-                        draw();
+                        if (at == selected) draw();
+                        notifyFull();
                     });
                 }
                 if (bg == h) h.postDelayed(this, failed ? RETRY_MS : REFRESH_MS);
             }
         });
-        main.removeCallbacks(rotate);
-        main.postDelayed(rotate, ROTATE_MS);
+    }
+
+    /**
+     * Told on the main thread whenever a place's stories change: every place in order as {label, rows}, each row
+     * {headline, "Source · 2h"}.
+     */
+    private java.util.function.Consumer<List<Object[]>> fullListener;
+
+    void setFullListener(java.util.function.Consumer<List<Object[]>> listener) {
+        fullListener = listener;
+    }
+
+    private void notifyFull() {
+        if (fullListener == null) return;
+        long now = System.currentTimeMillis();
+        List<Object[]> all = new ArrayList<>();
+        for (int i = 0; i < places.size(); i++) {
+            List<String[]> rows = new ArrayList<>();
+            for (Story s : stories.get(i)) {
+                rows.add(new String[]{s.title, (s.source.isEmpty() ? "" : s.source + " · ") + age(now - s.time)});
+            }
+            all.add(new Object[]{places.get(i).label, rows});
+        }
+        fullListener.accept(all);
     }
 
     void stop() {
-        main.removeCallbacks(rotate);
         if (thread == null) return;
         bg.removeCallbacksAndMessages(null);
         thread.quit();
@@ -173,21 +255,22 @@ final class NewsCard {
         bg = null;
     }
 
-    /** Each row shows the next of its stories in turn; a place with none says so. */
+    /** The chosen place's stories, one per row; "No recent news" when it has none yet. */
     private void draw() {
+        if (places.isEmpty()) return;
         long now = System.currentTimeMillis();
-        for (int i = 0; i < places.size(); i++) {
-            List<Story> list = stories.get(i);
-            if (list.isEmpty()) {
-                headlines[i].setText("No recent news");
+        List<Story> list = stories.get(selected);
+        for (int i = 0; i < PER_PLACE; i++) {
+            if (i < list.size()) {
+                Story s = list.get(i);
+                headlines[i].setText(s.title);
+                headlines[i].setTextColor(TEXT);
+                ages[i].setText((s.source.isEmpty() ? "" : s.source + " · ") + age(now - s.time));
+            } else {
+                headlines[i].setText(i == 0 ? "No recent news" : "");
                 headlines[i].setTextColor(DIM);
                 ages[i].setText("");
-                continue;
             }
-            Story s = list.get(turn % list.size());
-            headlines[i].setText(s.title);
-            headlines[i].setTextColor(0xF2FFFFFF);
-            ages[i].setText((s.source.isEmpty() ? "" : s.source + " · ") + age(now - s.time));
         }
     }
 
@@ -202,10 +285,14 @@ final class NewsCard {
     private List<Story> fetch(Place p) {
         HttpURLConnection c = null;
         try {
+            // A place's search is either a Google News search or, starting with http, a local paper's own RSS feed
+            // (a Punekar News feed, say), read as it is: every story counts, the source is the feed's own name.
+            boolean direct = p.query.startsWith("http");
             String hl = "hi".equals(p.lang) ? "hl=hi&gl=IN&ceid=IN:hi" : "hl=en-IN&gl=IN&ceid=IN:en";
-            URL url = new URL("https://news.google.com/rss/search?q=" + URLEncoder.encode(p.query + " when:3d", "UTF-8")
-                    + "&" + hl);
+            URL url = new URL(direct ? p.query : "https://news.google.com/rss/search?q="
+                    + URLEncoder.encode(p.query + " when:3d", "UTF-8") + "&" + hl);
             c = (HttpURLConnection) url.openConnection();
+            c.setInstanceFollowRedirects(true);
             c.setConnectTimeout(10_000);
             c.setReadTimeout(15_000);
             c.setRequestProperty("User-Agent", "Mozilla/5.0");
@@ -214,28 +301,51 @@ final class NewsCard {
             try (InputStream in = c.getInputStream()) {
                 doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
             }
-            SimpleDateFormat rfc = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+            // Google News writes "GMT", WordPress feeds "+0000".
+            SimpleDateFormat[] dates = {new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US),
+                    new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.US)};
+            String feedName = "";
+            NodeList channels = doc.getElementsByTagName("channel");
+            if (direct && channels.getLength() > 0) {
+                // "Punekar News - Pune's Daily News…" or, for a site search, "You searched for baner - Punekar News":
+                // the paper's name either way.
+                feedName = child((Element) channels.item(0), "title");
+                boolean search = feedName.startsWith("You searched");
+                int cut = search ? feedName.lastIndexOf(" - ") : feedName.indexOf(" - ");
+                if (cut > 0) feedName = (search ? feedName.substring(cut + 3) : feedName.substring(0, cut)).trim();
+            }
             List<Story> out = new ArrayList<>();
             NodeList items = doc.getElementsByTagName("item");
             for (int i = 0; i < items.getLength(); i++) {
                 Element item = (Element) items.item(i);
                 String title = child(item, "title");
-                if (title.isEmpty() || !mentions(title, p.keywords) || excluded(title)) continue;
+                if (title.isEmpty() || excluded(title) || !direct && !mentions(title, p.keywords)) continue;
                 Story s = new Story();
-                // Google News titles end in " - Source".
-                int dash = title.lastIndexOf(" - ");
-                s.title = dash > 0 ? title.substring(0, dash).trim() : title;
-                s.source = dash > 0 ? title.substring(dash + 3).trim() : child(item, "source");
-                try {
-                    Date when = rfc.parse(child(item, "pubDate"));
-                    s.time = when == null ? 0 : when.getTime();
-                } catch (Exception e) {
-                    s.time = 0;
+                if (direct) {
+                    s.title = title;
+                    s.source = feedName;
+                } else {
+                    // Google News titles end in " - Source".
+                    int dash = title.lastIndexOf(" - ");
+                    s.title = dash > 0 ? title.substring(0, dash).trim() : title;
+                    s.source = dash > 0 ? title.substring(dash + 3).trim() : child(item, "source");
+                }
+                String pub = child(item, "pubDate");
+                for (SimpleDateFormat f : dates) {
+                    try {
+                        Date when = f.parse(pub);
+                        if (when != null) {
+                            s.time = when.getTime();
+                            break;
+                        }
+                    } catch (Exception ignored) {
+                        // try the next format
+                    }
                 }
                 out.add(s);
             }
             out.sort((a, b) -> Long.compare(b.time, a.time));
-            return out.size() > PER_PLACE ? new ArrayList<>(out.subList(0, PER_PLACE)) : out;
+            return out.size() > KEEP ? new ArrayList<>(out.subList(0, KEEP)) : out;
         } catch (Exception e) {
             return null;
         } finally {

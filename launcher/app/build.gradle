@@ -25,6 +25,10 @@ android {
         resValue 'string', 'weather_longitude_local', localProps.getProperty('weather.longitude', '')
         resValue 'string', 'weather_place_local', localProps.getProperty('weather.place', '')
         resValue 'string', 'news_places_local', localProps.getProperty('news.places', '')
+        resValue 'string', 'commute_url_local', localProps.getProperty('commute.url', '')
+        resValue 'string', 'commute_key_local', localProps.getProperty('commute.key', '')
+        resValue 'string', 'commute_from_local', localProps.getProperty('commute.from', '')
+        resValue 'string', 'commute_to_local', localProps.getProperty('commute.to', '')
     }
 
     buildTypes {
