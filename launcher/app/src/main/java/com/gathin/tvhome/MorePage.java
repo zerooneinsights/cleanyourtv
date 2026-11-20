@@ -149,9 +149,9 @@ final class MorePage {
                 card.addView(none, nlp);
             }
             for (String[] r : rows) {
-                TextView h = text(r[0], 15, regular, TEXT);
+                TextView h = text(r[0].length() > 280 ? r[0].substring(0, 279).trim() + "…" : r[0], 15, regular, TEXT);
                 h.setSingleLine(false);
-                h.setMaxLines(2);
+                h.setMaxLines(8);
                 LinearLayout.LayoutParams hlp = wrap();
                 hlp.topMargin = px(12);
                 card.addView(h, hlp);

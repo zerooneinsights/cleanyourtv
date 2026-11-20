@@ -35,7 +35,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 /**
  * config.xml show_news: a card under the ticker with a tab per place and, under the tabs, the chosen place's newest
  * local headlines with source and age. Up from the apps reaches the tabs, Left/Right moves between places (the
- * headlines follow the focus), Down goes back to the apps; the last place chosen is remembered. From Google News'
+ * headlines follow the focus), Down goes back to the apps; Home opens on the first place every time. From Google News'
  * search feeds (no account or key): read on every return to Home and every 10 minutes while it stays up, 5 minutes
  * after a failure.
  *
@@ -56,7 +56,27 @@ final class NewsCard {
     private static final class Place {
         String label, query, lang;
         String[] keywords;
+        /** Its link answered the X posts script's JSON: posts, shown whole a page at a time. */
+        volatile boolean posts;
     }
+
+    /** A post is shown whole up to X's 280 characters; longer ones end in "…". */
+    private static final int POST_MAX = 280;
+    /** About how many characters fit a line of the card, and how many lines a page of posts may take. */
+    private static final int POST_LINE_CHARS = 60;
+    private static final int POST_PAGE_LINES = 6;
+    private static final long POST_PAGE_MS = 10_000L;
+    private int postPage;
+    private final Runnable postTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!places.isEmpty() && places.get(selected).posts) {
+                postPage++;
+                draw();
+            }
+            main.postDelayed(this, POST_PAGE_MS);
+        }
+    };
 
     private static final class Story {
         String title, source;
@@ -94,9 +114,7 @@ final class NewsCard {
         }
         Context ctx = card.getContext();
         prefs = ctx.getSharedPreferences("news", Context.MODE_PRIVATE);
-        // The last place chosen, by name (so reordering places never mixes them up); the first place otherwise.
-        String last = prefs.getString("tab_label", "");
-        for (int i = 0; i < places.size(); i++) if (places.get(i).label.equals(last)) selected = i;
+        // Home always opens on the first place (the X posts, when they're first), not the last one chosen.
         float d = ctx.getResources().getDisplayMetrics().density;
         Typeface regular = null, medium = null;
         try {
@@ -174,6 +192,7 @@ final class NewsCard {
     }
 
     private void select(int index) {
+        if (index != selected) postPage = 0;
         selected = index;
         for (int i = 0; i < tabs.size(); i++) tabs.get(i).setSelected(i == index);
         prefs.edit().putString("tab_label", places.get(index).label).apply();
@@ -195,6 +214,9 @@ final class NewsCard {
     void start() {
         if (thread != null || places.isEmpty()) return;
         card.setVisibility(View.VISIBLE);
+        select(0);                                         // every return to Home starts on the first tab
+        main.removeCallbacks(postTick);
+        main.postDelayed(postTick, POST_PAGE_MS);
         thread = new HandlerThread("news");
         thread.start();
         Handler h = new Handler(thread.getLooper());
@@ -249,6 +271,7 @@ final class NewsCard {
 
     void stop() {
         if (thread == null) return;
+        main.removeCallbacks(postTick);
         bg.removeCallbacksAndMessages(null);
         thread.quit();
         thread = null;
@@ -260,6 +283,15 @@ final class NewsCard {
         if (places.isEmpty()) return;
         long now = System.currentTimeMillis();
         List<Story> list = stories.get(selected);
+        if (places.get(selected).posts && !list.isEmpty()) {
+            drawPosts(list, now);
+            return;
+        }
+        for (int i = 0; i < PER_PLACE; i++) {
+            ((View) headlines[i].getParent()).setVisibility(View.VISIBLE);
+            headlines[i].setSingleLine(true);
+            ages[i].setVisibility(View.VISIBLE);
+        }
         for (int i = 0; i < PER_PLACE; i++) {
             if (i < list.size()) {
                 Story s = list.get(i);
@@ -274,6 +306,55 @@ final class NewsCard {
         }
     }
 
+    /**
+     * Posts whole (up to POST_MAX), the handle and age after each, as many to a page as fit POST_PAGE_LINES; the
+     * pages turn every POST_PAGE_MS.
+     */
+    private void drawPosts(List<Story> list, long now) {
+        List<int[]> pages = new ArrayList<>();          // {first, count}
+        for (int i = 0; i < list.size(); ) {
+            int lines = 0, count = 0;
+            while (i + count < list.size() && count < PER_PLACE) {
+                int need = (postText(list.get(i + count)).length() + 16) / POST_LINE_CHARS + 1;
+                if (count > 0 && lines + need > POST_PAGE_LINES) break;
+                lines += need;
+                count++;
+            }
+            pages.add(new int[]{i, count});
+            i += count;
+        }
+        int[] page = pages.get(Math.floorMod(postPage, pages.size()));
+        for (int i = 0; i < PER_PLACE; i++) {
+            View row = (View) headlines[i].getParent();
+            if (i >= page[1]) {
+                row.setVisibility(View.GONE);
+                continue;
+            }
+            Story s = list.get(page[0] + i);
+            row.setVisibility(View.VISIBLE);
+            ages[i].setVisibility(View.GONE);
+            headlines[i].setSingleLine(false);
+            headlines[i].setMaxLines(POST_PAGE_LINES);
+            headlines[i].setTextColor(TEXT);
+            android.text.SpannableStringBuilder t = new android.text.SpannableStringBuilder(postText(s));
+            int start = t.length();
+            t.append("   ").append(s.source).append(" · ").append(age(now - s.time));
+            if (i == page[1] - 1 && pages.size() > 1) {
+                t.append("   ").append(String.valueOf(Math.floorMod(postPage, pages.size()) + 1)).append('/')
+                        .append(String.valueOf(pages.size()));
+            }
+            t.setSpan(new android.text.style.ForegroundColorSpan(DIM), start, t.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            t.setSpan(new android.text.style.RelativeSizeSpan(0.85f), start, t.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            headlines[i].setText(t);
+        }
+    }
+
+    private static String postText(Story s) {
+        return s.title.length() <= POST_MAX ? s.title : s.title.substring(0, POST_MAX - 1).trim() + "…";
+    }
+
     private static String age(long ms) {
         long min = Math.max(0, ms / 60_000L);
         if (min < 60) return min + "m";
@@ -286,7 +367,8 @@ final class NewsCard {
         HttpURLConnection c = null;
         try {
             // A place's search is either a Google News search or, starting with http, a local paper's own RSS feed
-            // (a Punekar News feed, say), read as it is: every story counts, the source is the feed's own name.
+            // (a Punekar News feed, say), read as it is: every story counts, the source is the feed's own name. An http
+            // link answering JSON is the owner's X posts script (see posts()).
             boolean direct = p.query.startsWith("http");
             String hl = "hi".equals(p.lang) ? "hl=hi&gl=IN&ceid=IN:hi" : "hl=en-IN&gl=IN&ceid=IN:en";
             URL url = new URL(direct ? p.query : "https://news.google.com/rss/search?q="
@@ -297,10 +379,21 @@ final class NewsCard {
             c.setReadTimeout(15_000);
             c.setRequestProperty("User-Agent", "Mozilla/5.0");
             if (c.getResponseCode() != 200) return null;
-            Document doc;
+            java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
             try (InputStream in = c.getInputStream()) {
-                doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+                byte[] buf = new byte[16384];
+                for (int n; (n = in.read(buf)) > 0; ) body.write(buf, 0, n);
             }
+            byte[] bytes = body.toByteArray();
+            // The owner's X posts script answers JSON ({"posts":[..]}), not RSS: a post is a headline, its handle the source.
+            int first = 0;
+            while (first < bytes.length && Character.isWhitespace(bytes[first])) first++;
+            if (first < bytes.length && bytes[first] == '{') {
+                p.posts = true;
+                return posts(new String(bytes, "UTF-8"));
+            }
+            Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                    .parse(new java.io.ByteArrayInputStream(bytes));
             // Google News writes "GMT", WordPress feeds "+0000".
             SimpleDateFormat[] dates = {new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US),
                     new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.US)};
@@ -351,6 +444,25 @@ final class NewsCard {
         } finally {
             if (c != null) c.disconnect();
         }
+    }
+
+    /** {"posts":[{"handle","text","time"(ms),..}]}: newest first, excluded phrases dropped. */
+    private List<Story> posts(String json) throws org.json.JSONException {
+        org.json.JSONArray list = new org.json.JSONObject(json).optJSONArray("posts");
+        List<Story> out = new ArrayList<>();
+        for (int i = 0; list != null && i < list.length(); i++) {
+            org.json.JSONObject post = list.optJSONObject(i);
+            if (post == null) continue;
+            String text = post.optString("text").trim();
+            if (text.isEmpty() || excluded(text)) continue;
+            Story s = new Story();
+            s.title = text;
+            s.source = post.optString("handle");
+            s.time = post.optLong("time");
+            out.add(s);
+        }
+        out.sort((a, b) -> Long.compare(b.time, a.time));
+        return out.size() > KEEP ? new ArrayList<>(out.subList(0, KEEP)) : out;
     }
 
     private static String child(Element item, String tag) {
