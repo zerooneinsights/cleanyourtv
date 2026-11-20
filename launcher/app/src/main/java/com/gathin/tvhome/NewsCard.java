@@ -58,7 +58,12 @@ final class NewsCard {
         String[] keywords;
         /** Its link answered the X posts script's JSON: posts, shown whole a page at a time. */
         volatile boolean posts;
+        /** When it was last read successfully (posts are read hourly, not with every news refresh). */
+        long readAt;
     }
+
+    /** The X posts are checked once an hour; the news every REFRESH_MS. */
+    private static final long POSTS_REFRESH_MS = 3_600_000L;
 
     /** A post is shown whole up to X's 280 characters; longer ones end in "…". */
     private static final int POST_MAX = 280;
@@ -227,11 +232,14 @@ final class NewsCard {
                 if (bg != h) return;
                 boolean failed = false;
                 for (int i = 0; i < places.size(); i++) {
-                    List<Story> found = fetch(places.get(i));
+                    Place place = places.get(i);
+                    if (place.posts && System.currentTimeMillis() - place.readAt < POSTS_REFRESH_MS) continue;
+                    List<Story> found = fetch(place);
                     if (found == null) {
                         failed = true;
                         continue;
                     }
+                    place.readAt = System.currentTimeMillis();
                     int at = i;
                     main.post(() -> {
                         if (bg != h) return;
