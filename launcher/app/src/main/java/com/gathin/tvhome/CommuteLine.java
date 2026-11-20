@@ -135,10 +135,7 @@ final class CommuteLine {
         if (trips == null) return;
         view.setVisibility(View.VISIBLE);
         view.setText(line(trips[0]));
-        if (backView != null) {
-            backView.setVisibility(trips[1] == null ? View.GONE : View.VISIBLE);
-            if (trips[1] != null) backView.setText(line(trips[1]));
-        }
+        if (backView != null) backView.setText(trips[1] == null ? "—" : line(trips[1]));
     }
 
     /** {there, back}; back is null when there's no answer for the return trip. Null when the first read failed. */
@@ -226,34 +223,32 @@ final class CommuteLine {
         // Green while traffic adds under a tenth, amber under a third, red beyond.
         float share = t.minutes <= t.delay ? 1f : t.delay / (float) (t.minutes - t.delay);
         int colour = share < 0.1f ? GREEN : share < 0.33f ? AMBER : RED;
+        long now = System.currentTimeMillis();
+        SimpleDateFormat clock = new SimpleDateFormat("h:mm a", Locale.US);
 
+        // The commute card's column: the drive time large, then "by 6:50 PM" (and the delay), then the best time.
         SpannableStringBuilder s = new SpannableStringBuilder();
-        s.append(t.label).append("  ");
         int start = s.length();
         s.append(formatMinutes(t.minutes));
         s.setSpan(new ForegroundColorSpan(colour), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        start = s.length();
-        if (t.delay > 0) s.append(" · +").append(formatMinutes(t.delay)).append(" traffic");
-        long now = System.currentTimeMillis();
-        SimpleDateFormat clock = new SimpleDateFormat("h:mm a", Locale.US);
-        s.append(" · reach ").append(clock.format(new Date(now + t.minutes * 60_000L)));
-        s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        // "· leave 7:30 PM, saves 12 min" while that time is still ahead and still worth the wait; in green.
+        s.setSpan(new android.text.style.RelativeSizeSpan(1.75f), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        s.append("\nby ").append(clock.format(new Date(now + t.minutes * 60_000L)));
+        if (t.delay > 0) {
+            start = s.length();
+            s.append(" · +").append(formatMinutes(t.delay));
+            s.setSpan(new ForegroundColorSpan(colour), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        String best = null;
         int saves = t.minutes - t.laterMinutes;
-        if (t.leaveAt > now && saves >= 5) {
-            s.append(" · ");
+        if (t.leaveAt > now && saves >= 5) best = "leave " + clock.format(new Date(t.leaveAt));
+        else if (t.bestTime != null) best = "best " + t.bestTime;
+        if (best != null) {
+            s.append('\n');
             start = s.length();
-            s.append("leave ").append(clock.format(new Date(t.leaveAt))).append(", saves ").append(formatMinutes(saves));
+            s.append(best);
             s.setSpan(new ForegroundColorSpan(GREEN), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            s.setSpan(new android.text.style.RelativeSizeSpan(0.92f), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
-        // "· best 8:30 AM (36 min)", or "best tmrw 8:30 AM" once today's window has passed.
-        if (t.bestTime != null) {
-            start = s.length();
-            s.append(" · best ").append(t.bestTomorrow ? "tmrw " : "").append(t.bestTime);
-            if (t.bestMinutes > 0) s.append(" (").append(formatMinutes(t.bestMinutes)).append(")");
-            s.setSpan(new ForegroundColorSpan(GREEN), start + 3, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        }
-        // The road is on the second page's commute card; Home keeps the line short.
         return s;
     }
 

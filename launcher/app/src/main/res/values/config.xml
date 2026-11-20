@@ -538,8 +538,8 @@
     <string-array name="returns_symbols" translatable="false">
         <item>^NSEI|Nifty 50</item>
         <item>NIFTYMIDCAP150.NS|Midcap 150</item>
-        <item>GOLDBEES.NS|Gold</item>
-        <item>SILVERBEES.NS|Silver</item>
+        <item>GOLDBEES.NS|Gold (10g)|gold10g</item>
+        <item>SILVERBEES.NS|Silver (kg)|silverkg</item>
         <item>LRCX|LRCX</item>
     </string-array>
     <string-array name="returns_periods" translatable="false">
@@ -614,7 +614,7 @@
     <!-- The glow behind the dock in the focused app's colour (red for YouTube, blue for Prime Video). false keeps
          only background_color or the wallpaper behind everything. Can also be set with "ambient_glow": false in a
          theme's config.json. -->
-    <bool name="ambient_glow">true</bool>
+    <bool name="ambient_glow">false</bool>
     <!-- true: when the focus moves to an app of another colour, the ambient glow takes the new colour in one frame
          instead of dimming and fading back in. Each frame of that fade repaints the whole screen, about 40 per key
          press, which a slow GPU such as the Mali-G52 cannot keep up with. Can also be set with "glow_snap" in a

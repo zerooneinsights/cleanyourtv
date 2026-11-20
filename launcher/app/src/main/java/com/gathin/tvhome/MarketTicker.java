@@ -66,53 +66,92 @@ final class MarketTicker {
             // The system font is fine.
         }
         float d = ctx.getResources().getDisplayMetrics().density;
+        boolean sideBySide = card.getOrientation() == LinearLayout.HORIZONTAL;
         for (int i = 0; i < symbols.length; i++) {
             String[] parts = symbols[i].split("\\|", 2);
             Row r = new Row();
+            if (sideBySide && i > 0) {
+                View rule = new View(ctx);
+                rule.setBackgroundColor(0x24FFFFFF);
+                LinearLayout.LayoutParams ruleLp = new LinearLayout.LayoutParams(Math.max(1, Math.round(d)),
+                        LinearLayout.LayoutParams.MATCH_PARENT);
+                ruleLp.setMarginStart(Math.round(8 * d));
+                ruleLp.setMarginEnd(Math.round(10 * d));
+                card.addView(rule, ruleLp);
+            }
+            // Side by side: each index a column, its price line with the chart beside it.
             LinearLayout row = new LinearLayout(ctx);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+            row.setOrientation(sideBySide ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+            row.setGravity(sideBySide ? Gravity.START : Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams rowLp = sideBySide
+                    ? new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    : new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
-            if (i > 0) rowLp.topMargin = Math.round(10 * d);
+            if (i > 0 && !sideBySide) rowLp.topMargin = Math.round(6 * d);
             card.addView(row, rowLp);
 
             LinearLayout text = new LinearLayout(ctx);
             text.setOrientation(LinearLayout.VERTICAL);
-            text.setMinimumWidth(Math.round(170 * d));
+            if (!sideBySide) text.setMinimumWidth(Math.round(118 * d));
             row.addView(text, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT));
             LinearLayout top = new LinearLayout(ctx);
             top.setGravity(Gravity.CENTER_VERTICAL);
             text.addView(top);
-            TextView name = label(ctx, 11, medium, 0xCCFFFFFF);
-            name.setLetterSpacing(0.1f);
+            TextView name = label(ctx, sideBySide ? 10 : 11, medium, 0xCCFFFFFF);
+            name.setLetterSpacing(sideBySide ? 0.04f : 0.1f);
             name.setText(parts.length > 1 ? parts[1] : parts[0]);
             top.addView(name);
-            r.badge = label(ctx, 8, medium, 0xCCFFFFFF);
+            r.badge = label(ctx, sideBySide ? 7 : 8, medium, 0xCCFFFFFF);
             r.badge.setLetterSpacing(0.08f);
             r.badge.setBackgroundResource(R.drawable.widget_badge);
             r.badge.setPadding(Math.round(5 * d), Math.round(1 * d), Math.round(5 * d), Math.round(1 * d));
             LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
-            badgeLp.setMarginStart(Math.round(8 * d));
+            badgeLp.setMarginStart(Math.round((sideBySide ? 5 : 8) * d));
             top.addView(r.badge, badgeLp);
             r.badge.setVisibility(View.GONE);
+            if (sideBySide) {
+                // NIFTY 50 [CLOSED] / 25,800.60 / ▲ 572.70 · 2.27%  with the day's line to the right of the numbers.
+                LinearLayout body = new LinearLayout(ctx);
+                body.setOrientation(LinearLayout.HORIZONTAL);
+                body.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams bodyLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                bodyLp.topMargin = Math.round(6 * d);
+                row.addView(body, bodyLp);
+                LinearLayout numbers = new LinearLayout(ctx);
+                numbers.setOrientation(LinearLayout.VERTICAL);
+                body.addView(numbers, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                r.price = label(ctx, 15, regular, 0xFFFFFFFF);
+                numbers.addView(r.price);
+                r.change = label(ctx, 9, regular, 0xCCFFFFFF);
+                LinearLayout.LayoutParams changeLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                changeLp.topMargin = Math.round(5 * d);
+                numbers.addView(r.change, changeLp);
+                r.chart = new SparklineView(ctx);
+                LinearLayout.LayoutParams chartLp = new LinearLayout.LayoutParams(Math.round(30 * d), Math.round(26 * d));
+                chartLp.setMarginStart(Math.round(2 * d));
+                body.addView(r.chart, chartLp);
+                rows[i] = r;
+                continue;
+            }
+            // The price, and the day's change under it (side by side they left the commute card too little room).
             LinearLayout bottom = new LinearLayout(ctx);
-            bottom.setGravity(Gravity.BOTTOM);
+            bottom.setOrientation(LinearLayout.VERTICAL);
             text.addView(bottom);
-            r.price = label(ctx, 19, regular, 0xFFFFFFFF);
+            r.price = label(ctx, 16, regular, 0xFFFFFFFF);
             bottom.addView(r.price);
             r.change = label(ctx, 10, regular, 0xCCFFFFFF);
             LinearLayout.LayoutParams changeLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
-            changeLp.setMarginStart(Math.round(6 * d));
-            changeLp.bottomMargin = Math.round(3 * d);
+            changeLp.topMargin = Math.round(3 * d);
             bottom.addView(r.change, changeLp);
 
             r.chart = new SparklineView(ctx);
-            LinearLayout.LayoutParams chartLp = new LinearLayout.LayoutParams(Math.round(80 * d), Math.round(32 * d));
-            chartLp.setMarginStart(Math.round(10 * d));
+            LinearLayout.LayoutParams chartLp = new LinearLayout.LayoutParams(Math.round(62 * d), Math.round(30 * d));
+            chartLp.setMarginStart(Math.round(8 * d));
             row.addView(r.chart, chartLp);
             rows[i] = r;
         }
@@ -201,7 +240,11 @@ final class MarketTicker {
             JSONObject meta = result.getJSONObject("meta");
             Quote q = new Quote();
             q.price = meta.getDouble("regularMarketPrice");
-            q.previous = meta.optDouble("chartPreviousClose", meta.optDouble("previousClose", q.price));
+            // The intraday chart's own previous close can be two sessions old (seen on Nifty: the change shown double),
+            // so take it from the daily closes: the last one before the latest session's day.
+            Double daily = previousClose(symbol, meta.optLong("regularMarketTime"), meta.optInt("gmtoffset", 19800));
+            q.previous = daily != null ? daily
+                    : meta.optDouble("chartPreviousClose", meta.optDouble("previousClose", q.price));
             q.change = q.price - q.previous;
             q.percent = q.previous == 0 ? 0 : q.change / q.previous * 100;
             JSONArray closes = result.optJSONObject("indicators") == null ? null
@@ -218,6 +261,41 @@ final class MarketTicker {
             long now = System.currentTimeMillis() / 1000;
             q.open = regular != null && now >= regular.optLong("start") && now < regular.optLong("end");
             return q;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    /** The last daily close on a day before the session at {@code marketTime}; null when it can't be read. */
+    private static Double previousClose(String symbol, long marketTime, int gmtOffset) {
+        HttpURLConnection c = null;
+        try {
+            URL url = new URL("https://query1.finance.yahoo.com/v8/finance/chart/"
+                    + java.net.URLEncoder.encode(symbol, "UTF-8") + "?interval=1d&range=10d");
+            c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(10_000);
+            c.setReadTimeout(10_000);
+            c.setRequestProperty("User-Agent", "Mozilla/5.0");
+            if (c.getResponseCode() != 200) return null;
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (InputStream in = c.getInputStream()) {
+                byte[] buf = new byte[8192];
+                for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+            }
+            JSONObject result = new JSONObject(out.toString("UTF-8"))
+                    .getJSONObject("chart").getJSONArray("result").getJSONObject(0);
+            JSONArray times = result.getJSONArray("timestamp");
+            JSONArray closes = result.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0)
+                    .getJSONArray("close");
+            long sessionDay = Math.floorDiv(marketTime + gmtOffset, 86_400L);
+            Double previous = null;
+            for (int i = 0; i < times.length(); i++) {
+                if (closes.isNull(i)) continue;
+                if (Math.floorDiv(times.getLong(i) + gmtOffset, 86_400L) < sessionDay) previous = closes.getDouble(i);
+            }
+            return previous;
         } catch (Exception e) {
             return null;
         } finally {

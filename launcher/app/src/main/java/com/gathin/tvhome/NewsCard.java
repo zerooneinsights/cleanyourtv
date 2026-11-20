@@ -47,7 +47,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 final class NewsCard {
     private static final long REFRESH_MS = 600_000L;
     private static final long RETRY_MS = 300_000L;
-    private static final int PER_PLACE = 5;
+    private static final int PER_PLACE = 3;
     /** Kept per place for the full list on the second page; Home shows the first PER_PLACE. */
     private static final int KEEP = 10;
     private static final int DIM = 0x99FFFFFF;
@@ -68,8 +68,10 @@ final class NewsCard {
     /** A post is shown whole up to X's 280 characters; longer ones end in "…". */
     private static final int POST_MAX = 280;
     /** About how many characters fit a line of the card, and how many lines a page of posts may take. */
-    private static final int POST_LINE_CHARS = 60;
+    private static final int POST_LINE_CHARS = 62;
     private static final int POST_PAGE_LINES = 6;
+    /** A page of posts takes about as much room as the news: text lines plus one source line per post. */
+    private static final int POST_PAGE_UNITS = 9;
     private static final long POST_PAGE_MS = 10_000L;
     private int postPage;
     private final Runnable postTick = new Runnable() {
@@ -96,6 +98,8 @@ final class NewsCard {
     private final List<TextView> tabs = new ArrayList<>();
     private final TextView[] headlines = new TextView[PER_PLACE];
     private final TextView[] ages = new TextView[PER_PLACE];
+    /** "4/5": which page of posts is up, in the card's bottom-right corner (like the calendar's "Updated"). */
+    private TextView pageLabel;
     private final SharedPreferences prefs;
     private int selected;
     private HandlerThread thread;
@@ -171,21 +175,41 @@ final class NewsCard {
             tabs.add(tab);
         }
 
-        // The chosen place's headlines.
+        // The chosen place's stories: the headline (two lines), its source and age under it, a hairline between.
         for (int i = 0; i < PER_PLACE; i++) {
             LinearLayout row = new LinearLayout(ctx);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(Math.round(4 * d), Math.round((i == 0 ? 8 : 5) * d), 0, 0);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(Math.round(6 * d), Math.round((i == 0 ? 8 : 0) * d), Math.round(2 * d), Math.round(6 * d));
+            if (i > 0) {
+                View rule = new View(ctx);
+                rule.setBackgroundColor(0x1FFFFFFF);
+                LinearLayout.LayoutParams ruleLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                        Math.max(1, Math.round(d)));
+                ruleLp.bottomMargin = Math.round(6 * d);
+                row.addView(rule, ruleLp);
+            }
             headlines[i] = text(ctx, i == 0 ? "…" : "", 12, regular, TEXT);
-            row.addView(headlines[i], new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            headlines[i].setSingleLine(false);
+            headlines[i].setMaxLines(2);
+            headlines[i].setLineSpacing(1 * d, 1f);
+            row.addView(headlines[i], new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT));
             ages[i] = text(ctx, "", 10, regular, DIM);
             LinearLayout.LayoutParams ageLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
-            ageLp.setMarginStart(Math.round(8 * d));
+            ageLp.topMargin = Math.round(4 * d);
             row.addView(ages[i], ageLp);
+            ages[i].setVisibility(View.GONE);            // the source and age sit at the end of the headline
             card.addView(row);
         }
+        // Push the page count to the bottom of the fixed-height card, at its right edge.
+        card.addView(new View(ctx), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        pageLabel = text(ctx, "", 9, regular, 0x66FFFFFF);
+        pageLabel.setGravity(Gravity.END);
+        LinearLayout.LayoutParams pageLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        pageLp.setMarginEnd(Math.round(2 * d));
+        card.addView(pageLabel, pageLp);
         select(selected);
     }
 
@@ -295,17 +319,18 @@ final class NewsCard {
             drawPosts(list, now);
             return;
         }
+        if (pageLabel != null) pageLabel.setText("");
         for (int i = 0; i < PER_PLACE; i++) {
-            ((View) headlines[i].getParent()).setVisibility(View.VISIBLE);
-            headlines[i].setSingleLine(true);
-            ages[i].setVisibility(View.VISIBLE);
+            ((View) headlines[i].getParent()).setVisibility(i < Math.max(1, list.size()) ? View.VISIBLE : View.GONE);
+            headlines[i].setMaxLines(2);
         }
         for (int i = 0; i < PER_PLACE; i++) {
             if (i < list.size()) {
                 Story s = list.get(i);
-                headlines[i].setText(s.title);
+                String meta = (s.source.isEmpty() ? "" : s.source + " · ") + age(now - s.time);
+                headlines[i].setText(withMeta(s.title, meta, 2 * POST_LINE_CHARS - meta.length() - 4));
                 headlines[i].setTextColor(TEXT);
-                ages[i].setText((s.source.isEmpty() ? "" : s.source + " · ") + age(now - s.time));
+                ages[i].setText("");
             } else {
                 headlines[i].setText(i == 0 ? "No recent news" : "");
                 headlines[i].setTextColor(DIM);
@@ -323,8 +348,9 @@ final class NewsCard {
         for (int i = 0; i < list.size(); ) {
             int lines = 0, count = 0;
             while (i + count < list.size() && count < PER_PLACE) {
-                int need = (postText(list.get(i + count)).length() + 16) / POST_LINE_CHARS + 1;
-                if (count > 0 && lines + need > POST_PAGE_LINES) break;
+                int need = (postText(list.get(i + count)).length() + 20) / POST_LINE_CHARS + 1;
+                // Fits the card's height: about 16dp a line and 14dp a row's gap (8 and 7 here), 156dp in all.
+                if (count > 0 && 8 * (lines + need) + 7 * (count + 1) > 78) break;
                 lines += need;
                 count++;
             }
@@ -332,6 +358,9 @@ final class NewsCard {
             i += count;
         }
         int[] page = pages.get(Math.floorMod(postPage, pages.size()));
+        if (pageLabel != null) {
+            pageLabel.setText(pages.size() > 1 ? (Math.floorMod(postPage, pages.size()) + 1) + "/" + pages.size() : "");
+        }
         for (int i = 0; i < PER_PLACE; i++) {
             View row = (View) headlines[i].getParent();
             if (i >= page[1]) {
@@ -340,23 +369,30 @@ final class NewsCard {
             }
             Story s = list.get(page[0] + i);
             row.setVisibility(View.VISIBLE);
-            ages[i].setVisibility(View.GONE);
-            headlines[i].setSingleLine(false);
             headlines[i].setMaxLines(POST_PAGE_LINES);
             headlines[i].setTextColor(TEXT);
-            android.text.SpannableStringBuilder t = new android.text.SpannableStringBuilder(postText(s));
-            int start = t.length();
-            t.append("   ").append(s.source).append(" · ").append(age(now - s.time));
-            if (i == page[1] - 1 && pages.size() > 1) {
-                t.append("   ").append(String.valueOf(Math.floorMod(postPage, pages.size()) + 1)).append('/')
-                        .append(String.valueOf(pages.size()));
-            }
-            t.setSpan(new android.text.style.ForegroundColorSpan(DIM), start, t.length(),
-                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            t.setSpan(new android.text.style.RelativeSizeSpan(0.85f), start, t.length(),
-                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            headlines[i].setText(t);
+            String meta = s.source + " · " + age(now - s.time);
+            headlines[i].setText(withMeta(postText(s), meta, Integer.MAX_VALUE));
         }
+    }
+
+    /** The text (cut to maxChars with "…"), then its source and age, smaller and dimmer, on the same line. */
+    private static CharSequence withMeta(String text, String meta, int maxChars) {
+        String t = text.length() > maxChars ? text.substring(0, Math.max(1, maxChars - 1)).trim() + "…" : text;
+        android.text.SpannableStringBuilder b = new android.text.SpannableStringBuilder(t);
+        int start = b.length();
+        b.append("   ").append(meta);
+        b.setSpan(new android.text.style.ForegroundColorSpan(DIM), start, b.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        b.setSpan(new android.text.style.RelativeSizeSpan(0.82f), start, b.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return b;
+    }
+
+    /** Focus the chosen tab (Up from the apps under the card); false with no places. */
+    boolean focusTab() {
+        if (tabs.isEmpty() || card.getVisibility() != View.VISIBLE) return false;
+        return tabs.get(selected).requestFocus();
     }
 
     private static String postText(Story s) {

@@ -67,7 +67,7 @@ final class CricketCard {
                 if (bg != h) return;
                 List<JSONObject[]> live = fetch();
                 if (live != null) {
-                    CharSequence text = live.isEmpty() ? null : format(live);
+                    CharSequence text = live.isEmpty() ? null : format(view.getContext(), live);
                     main.post(() -> {
                         if (bg != h) return;
                         view.setVisibility(text == null ? View.GONE : View.VISIBLE);
@@ -136,12 +136,14 @@ final class CricketCard {
      * The first followed match on one line, like the weather: "● LIVE  NZ 368 · IND 159/1 (39 ov) · 1st Test · Stumps",
      * with "+N more" when several are live. The full scorecard is the top bar's scorecard drop-down.
      */
-    private static CharSequence format(List<JSONObject[]> live) {
+    private static CharSequence format(android.content.Context ctx, List<JSONObject[]> live) {
         JSONObject event = live.get(0)[1];
         SpannableStringBuilder s = new SpannableStringBuilder();
         int start = s.length();
-        s.append("● LIVE  ");
-        s.setSpan(new ForegroundColorSpan(LIVE), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        s.append("● LIVE");
+        s.setSpan(new HomeSpans.Pill(ctx, 0xFFDC2626, 0, 0xFFFFFFFF, 0.62f), start, s.length(),
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        s.append("   ");
         JSONArray comps = event.optJSONArray("competitors");
         for (int i = 0; comps != null && i < comps.length(); i++) {
             JSONObject team = comps.optJSONObject(i);

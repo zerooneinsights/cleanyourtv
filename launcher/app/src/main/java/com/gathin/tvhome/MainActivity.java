@@ -619,8 +619,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             weather = new WeatherLine(findViewById(R.id.weather), handler,
                     getString(local ? R.string.weather_latitude_local : R.string.weather_latitude),
                     getString(local ? R.string.weather_longitude_local : R.string.weather_longitude),
-                    getString(local ? R.string.weather_place_local : R.string.weather_place));
+                    getString(local ? R.string.weather_place_local : R.string.weather_place),
+                    getString(R.string.weather_places_local));
         }
+        // The commute card: only with show_commute and a source for it in local.properties.
+        boolean commuteSource = !getString(R.string.commute_url_local).isEmpty()
+                || !getString(R.string.commute_key_local).isEmpty();
+        findViewById(R.id.commuteCard).setVisibility(getResources().getBoolean(R.bool.show_commute) && commuteSource
+                ? View.VISIBLE : View.GONE);
         if (getResources().getBoolean(R.bool.show_commute)) {
             commute = new CommuteLine(findViewById(R.id.commute), findViewById(R.id.commuteBack), handler, getString(R.string.commute_url_local),
                     getString(R.string.commute_key_local),
@@ -628,8 +634,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     getString(R.string.commute_label), getString(R.string.commute_label_back));
             ViewGroup root = findViewById(R.id.root);
             List<View> homeViews = new ArrayList<>();
-            List<Integer> fixed = Arrays.asList(R.id.sky, R.id.heroArt, R.id.ambient, R.id.heroScrim, R.id.glass,
-                    R.id.morePage);
+            List<Integer> fixed = Arrays.asList(R.id.homeBackdrop, R.id.sky, R.id.heroArt, R.id.ambient,
+                    R.id.heroScrim, R.id.glass, R.id.morePage);
             for (int i = 0; i < root.getChildCount(); i++) {
                 View child = root.getChildAt(i);
                 if (!fixed.contains(child.getId())) homeViews.add(child);
@@ -648,6 +654,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     () -> firstTopButton().requestFocus(),                          // Up from the city tabs
                     () -> focusTile(singleRow ? lastFocused : lastFocused % COLUMNS)); // Down, back to the apps
             if (morePage != null) news.setFullListener(morePage::showNews);   // every headline, on the second page
+            // A fixed size: as tall as the cricket and calendar column beside it, so the two end level.
+            View newsCard = findViewById(R.id.newsCard);
+            View column = findViewById(R.id.rightWidgets);
+            float minNews = 150 * getResources().getDisplayMetrics().density;
+            column.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                int h = b - t;
+                ViewGroup.LayoutParams lp = newsCard.getLayoutParams();
+                int want = h >= minNews ? h : ViewGroup.LayoutParams.WRAP_CONTENT;
+                if (lp.height != want) {
+                    lp.height = want;
+                    newsCard.post(() -> newsCard.setLayoutParams(lp));
+                }
+            });
         }
         if (getResources().getBoolean(R.bool.show_returns)) {
             returns = new ReturnsCard(findViewById(R.id.returnsCard), handler,
@@ -2638,7 +2657,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (singleRow) {
             // One row: Up leaves for the top bar, Down has nowhere to go, and Left/Right walk the whole row,
             // stopping at its two ends (the default focus search scrolls the row to the next tile).
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return false;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                // Under the news card: Up goes to its tabs (the focus search would pass them for the top bar).
+                if (news != null && tileUnderNews(position) && news.focusTab()) return true;
+                return false;
+            }
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) return true;
             boolean forward = rtlAppGrid ? keyCode == KeyEvent.KEYCODE_DPAD_LEFT : keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
             int last = adapter.focusablePosition(count - 1);
@@ -2677,6 +2700,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.playSoundEffect(keyCode == KeyEvent.KEYCODE_DPAD_UP
                 ? SoundEffectConstants.NAVIGATION_UP : SoundEffectConstants.NAVIGATION_DOWN);
         return true;
+    }
+
+    /** The tile at this position sits under the news card (its centre left of the card's right edge). */
+    private boolean tileUnderNews(int position) {
+        View newsCard = findViewById(R.id.newsCard);
+        RecyclerView.ViewHolder holder = grid.findViewHolderForAdapterPosition(position);
+        if (newsCard == null || holder == null || newsCard.getVisibility() != View.VISIBLE) return false;
+        int[] tile = new int[2], card = new int[2];
+        holder.itemView.getLocationOnScreen(tile);
+        newsCard.getLocationOnScreen(card);
+        return tile[0] + holder.itemView.getWidth() / 2 < card[0] + newsCard.getWidth();
     }
 
     @Override public void onLibraryFocused() {

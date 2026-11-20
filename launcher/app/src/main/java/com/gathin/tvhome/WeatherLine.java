@@ -30,27 +30,87 @@ final class WeatherLine {
     private static final long RETRY_MS = 300_000L;
     private static final int DIM = 0xA6FFFFFF;
 
+    /** How long each place's line stays before the next. */
+    private static final long TURN_MS = 5_000L;
+
+    private static final class Place {
+        String name, url, aqiUrl;
+        CharSequence line;                     // the last line read for it; null until then
+    }
+
     private final TextView view;
     private final Handler main;
-    private final String url;
-    private final String aqiUrl;
-    private final String place;
+    private final java.util.List<Place> places = new java.util.ArrayList<>();
+    private int shown = -1;
     private HandlerThread thread;
     private volatile Handler bg;
 
-    WeatherLine(TextView view, Handler main, String latitude, String longitude, String place) {
+    /** Shows the next place that has a line, every TURN_MS while Home is up. */
+    private final Runnable turn = new Runnable() {
+        @Override
+        public void run() {
+            for (int k = 1; k <= places.size(); k++) {
+                int i = (shown + k) % places.size();
+                if (places.get(i).line != null) {
+                    boolean other = i != shown;
+                    shown = i;
+                    view.setVisibility(View.VISIBLE);
+                    if (other) flipTo(places.get(i).line);
+                    else view.setText(places.get(i).line);
+                    break;
+                }
+            }
+            if (places.size() > 1) main.postDelayed(this, TURN_MS);
+        }
+    };
+
+    /**
+     * The first place from weather_latitude/longitude/place; more from {@code others}, "Name|lat|lon" separated by ";"
+     * (weather.places in launcher/local.properties, never committed), each shown in turn.
+     */
+    WeatherLine(TextView view, Handler main, String latitude, String longitude, String place, String others) {
         this.view = view;
+        // One line, cut at its end rather than ellipsized: an ellipsis breaks the AQI pill and the pin.
+        view.setSingleLine(false);
+        view.setMaxLines(1);
+        view.setEllipsize(null);
+        view.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14);
         this.main = main;
-        this.place = place;
-        this.url = "https://api.open-meteo.com/v1/forecast?latitude=" + latitude + "&longitude=" + longitude
+        add(place, latitude, longitude);
+        for (String spec : others.split(";")) {
+            String[] f = spec.trim().split("\\|");
+            if (f.length == 3) add(f[0].trim(), f[1].trim(), f[2].trim());
+        }
+    }
+
+    /** The old line folds away upwards and the new one flips up into place from below. */
+    private void flipTo(CharSequence line) {
+        float d = view.getResources().getDisplayMetrics().density;
+        view.setCameraDistance(8000 * d);
+        view.setPivotY(view.getHeight() / 2f);
+        view.animate().cancel();
+        view.animate().rotationX(-90f).translationY(-6 * d).alpha(0f).setDuration(170).withEndAction(() -> {
+            view.setText(line);
+            view.setRotationX(90f);
+            view.setTranslationY(6 * d);
+            view.animate().rotationX(0f).translationY(0f).alpha(1f).setDuration(240).withEndAction(null).start();
+        }).start();
+    }
+
+    private void add(String name, String latitude, String longitude) {
+        if (latitude.isEmpty() || longitude.isEmpty()) return;
+        Place p = new Place();
+        p.name = name;
+        p.url = "https://api.open-meteo.com/v1/forecast?latitude=" + latitude + "&longitude=" + longitude
                 + "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min"
                 + "&forecast_days=1&timezone=auto";
-        this.aqiUrl = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" + latitude + "&longitude="
+        p.aqiUrl = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" + latitude + "&longitude="
                 + longitude + "&current=pm2_5,pm10&hourly=pm2_5,pm10&past_days=1&forecast_days=1&timezone=auto";
+        places.add(p);
     }
 
     void start() {
-        if (thread != null) return;
+        if (thread != null || places.isEmpty()) return;
         thread = new HandlerThread("weather");
         thread.start();
         Handler h = new Handler(thread.getLooper());
@@ -59,21 +119,33 @@ final class WeatherLine {
             @Override
             public void run() {
                 if (bg != h) return;
-                CharSequence line = fetch();
-                if (line != null) {
+                boolean failed = false;
+                for (Place p : places) {
+                    CharSequence line = fetch(p);
+                    if (line == null) {
+                        failed = true;
+                        continue;
+                    }
                     main.post(() -> {
                         if (bg != h) return;
-                        view.setVisibility(View.VISIBLE);
-                        view.setText(line);
+                        p.line = line;
+                        if (shown < 0 || places.get(shown) == p) {   // the first line, or a fresher one for the shown place
+                            if (shown < 0) shown = places.indexOf(p);
+                            view.setVisibility(View.VISIBLE);
+                            view.setText(line);
+                        }
                     });
                 }
-                if (bg == h) h.postDelayed(this, line == null ? RETRY_MS : REFRESH_MS);
+                if (bg == h) h.postDelayed(this, failed ? RETRY_MS : REFRESH_MS);
             }
         });
+        main.removeCallbacks(turn);
+        main.postDelayed(turn, TURN_MS);
     }
 
     void stop() {
         if (thread == null) return;
+        main.removeCallbacks(turn);
         bg.removeCallbacksAndMessages(null);
         thread.quit();
         thread = null;
@@ -97,34 +169,44 @@ final class WeatherLine {
         }
     }
 
-    private CharSequence fetch() {
+    private CharSequence fetch(Place p) {
         try {
-            JSONObject json = get(url);
+            JSONObject json = get(p.url);
             if (json == null) return null;
             JSONObject now = json.getJSONObject("current");
             JSONObject daily = json.getJSONObject("daily");
             int code = now.getInt("weather_code");
             boolean day = now.optInt("is_day", 1) == 1;
             SpannableStringBuilder s = new SpannableStringBuilder();
-            s.append(icon(code, day)).append(' ')
-                    .append(String.format(Locale.US, "%d°", Math.round(now.getDouble("temperature_2m"))))
-                    .append(" ").append(describe(code));
             int start = s.length();
-            s.append(String.format(Locale.US, " · H %d° L %d°",
+            s.append(icon(code, day));
+            s.setSpan(new android.text.style.RelativeSizeSpan(1.4f), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            s.append(" ");
+            start = s.length();
+            s.append(String.format(Locale.US, "%d°C", Math.round(now.getDouble("temperature_2m"))));
+            s.setSpan(new android.text.style.RelativeSizeSpan(1.35f), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            s.append(" ").append(describe(code));
+            start = s.length();
+            s.append(String.format(Locale.US, "  H %d° L %d°",
                     Math.round(daily.getJSONArray("temperature_2m_max").getDouble(0)),
                     Math.round(daily.getJSONArray("temperature_2m_min").getDouble(0))));
             s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            int aqi = aqi();
+            int aqi = aqi(p.aqiUrl);
             if (aqi >= 0) {
-                s.append(" · ");
+                s.append("  ");
                 start = s.length();
-                s.append("AQI ").append(String.valueOf(aqi)).append(' ').append(aqiCategory(aqi));
-                s.setSpan(new ForegroundColorSpan(aqiColour(aqi)), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                s.append("AQI ").append(String.valueOf(aqi)).append(" · ").append(aqiCategory(aqi));
+                int c = aqiColour(aqi);
+                s.setSpan(new HomeSpans.Pill(view.getContext(), (c & 0x00FFFFFF) | 0x2E000000, 0, c, 0.9f), start,
+                        s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
-            if (!place.isEmpty()) {
+            if (!p.name.isEmpty()) {
+                s.append("  ");
                 start = s.length();
-                s.append(" · ").append(place);
-                s.setSpan(new ForegroundColorSpan(DIM), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                s.append("\u2009");
+                s.setSpan(new HomeSpans.Icon(view.getContext(), R.drawable.ic_place, 0xFFFFFFFF, 1.15f), start,
+                        s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                s.append(p.name);
             }
             return s;
         } catch (Exception e) {
@@ -133,7 +215,7 @@ final class WeatherLine {
     }
 
     /** India's AQI from the last 24 hours' mean PM2.5 and PM10 (the larger sub-index); -1 when it can't be read. */
-    private int aqi() {
+    private int aqi(String aqiUrl) {
         try {
             JSONObject json = get(aqiUrl);
             if (json == null) return -1;

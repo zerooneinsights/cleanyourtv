@@ -74,7 +74,7 @@ final class AgendaPanel {
         this.grid = grid;
         this.monthTitle = monthTitle;
         this.main = main;
-        grid.setCellSize(22 * ctx.getResources().getDisplayMetrics().density);
+        grid.setCellSize(18 * ctx.getResources().getDisplayMetrics().density);
     }
 
     void start() {
@@ -250,28 +250,38 @@ final class AgendaPanel {
         u.days = CalendarData.days(events, from, month.atEndOfMonth().plusDays(1), zone);
         u.title = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(today)
                 .toUpperCase(Locale.getDefault());
-        DateTimeFormatter day = DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault());
+        DateTimeFormatter day = DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault());
         SpannableStringBuilder s = new SpannableStringBuilder();
-        appendDay(s, "TODAY · " + day.format(today).toUpperCase(Locale.getDefault()), events, today, zone);
-        s.append("\n\n");
-        appendDay(s, "TOMORROW · " + day.format(today.plusDays(1)).toUpperCase(Locale.getDefault()), events,
-                today.plusDays(1), zone);
+        // The calendar mark before the first heading.
+        s.append("\u2009");
+        s.setSpan(new HomeSpans.Icon(ctx, R.drawable.ic_calendar, 0xE6FFFFFF, 1.25f), 0, 1,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        appendDay(ctx, s, "Today", day.format(today), events, today, zone);
+        s.append("\n");
+        appendDay(ctx, s, "Tomorrow", day.format(today.plusDays(1)), events, today.plusDays(1), zone);
         u.text = s;
         return u;
     }
 
-    private static void appendDay(SpannableStringBuilder s, String heading, List<CalendarData.Event> events,
-                                  LocalDate date, ZoneId zone) {
+    /** "Today · Fri, 20 Nov" (the word brighter), then the day's events, each with an amber bar beside it. */
+    private static void appendDay(Context ctx, SpannableStringBuilder s, String word, String date,
+                                  List<CalendarData.Event> events, LocalDate day, ZoneId zone) {
         int start = s.length();
-        s.append(heading);
-        s.setSpan(new ForegroundColorSpan(HEADING), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        s.setSpan(new RelativeSizeSpan(0.8f), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        List<CalendarData.Event> on = CalendarData.on(events, date, zone);
+        s.append(word);
+        s.setSpan(new ForegroundColorSpan(0xFFFFFFFF), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        s.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, s.length(),
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        int dateStart = s.length();
+        s.append(" · ").append(date);
+        s.setSpan(new ForegroundColorSpan(HEADING), dateStart, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        s.setSpan(new RelativeSizeSpan(0.92f), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        List<CalendarData.Event> on = CalendarData.on(events, day, zone);
         for (int i = 0; i < Math.min(on.size(), MAX_PER_DAY); i++) {
             CalendarData.Event e = on.get(i);
             s.append('\n');
+            int line = s.length();
             start = s.length();
-            s.append(CalendarData.when(e, date, zone)).append("   ");
+            s.append(CalendarData.when(e, day, zone)).append("   ");
             s.setSpan(new ForegroundColorSpan(TIME), start, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             s.append(e.title);
         }

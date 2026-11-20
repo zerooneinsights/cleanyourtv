@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home's backdrop: a dark slate, a touch lighter at the top. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="#FF1E242C"
+        android:centerColor="#FF161B21"
+        android:endColor="#FF0F1317" />
+</shape>

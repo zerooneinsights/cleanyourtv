@@ -36,14 +36,16 @@ final class ReturnsCard {
     private static final int UP = 0xFF4ADE80;
     private static final int DOWN = 0xFFF87171;
     private static final int DIM = 0x99FFFFFF;
-    private static final int NAME_DP = 86;
-    private static final int COL_DP = 44;
+    private static final int NAME_DP = 78;
+    private static final int COL_DP = 42;
+    private static final int PRICE_DP = 64;
 
     private final LinearLayout card;
     private final Handler main;
     private final String[] symbols;   // "symbol|label"
     private final String[] periods;
     private final TextView[][] cells;
+    private final TextView[] prices;
     private final float density;
     private HandlerThread thread;
     private volatile Handler bg;
@@ -63,16 +65,26 @@ final class ReturnsCard {
             // The system font is fine.
         }
         LinearLayout head = row();
-        head.addView(cell("RETURNS", NAME_DP, 10, medium, DIM, Gravity.START));
+        TextView title = cell("RETURNS", NAME_DP, 10, medium, DIM, Gravity.START);
+        android.text.SpannableStringBuilder mark = new android.text.SpannableStringBuilder("\u2009RETURNS");
+        mark.setSpan(new HomeSpans.Icon(ctx, R.drawable.ic_bars, 0xCCFFFFFF, 1.4f), 0, 1,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        title.setText(mark);
+        head.addView(title);
+        head.addView(cell("PRICE", PRICE_DP, 10, medium, DIM, Gravity.END));
         for (String p : periods) head.addView(cell(p, COL_DP, 10, medium, DIM, Gravity.END));
         card.addView(head);
         cells = new TextView[symbols.length][periods.length];
+        prices = new TextView[symbols.length];
         for (int i = 0; i < symbols.length; i++) {
             String[] parts = symbols[i].split("\\|", 2);
             LinearLayout r = row();
-            r.addView(cell(parts.length > 1 ? parts[1] : parts[0], NAME_DP, 12, medium, 0xF2FFFFFF, Gravity.START));
+            r.addView(cell(parts.length > 1 ? parts[1].split("\\|")[0] : parts[0], NAME_DP, 11, medium, 0xF2FFFFFF,
+                    Gravity.START));
+            prices[i] = cell("–", PRICE_DP, 11, regular, 0xF2FFFFFF, Gravity.END);
+            r.addView(prices[i]);
             for (int j = 0; j < periods.length; j++) {
-                cells[i][j] = cell("–", COL_DP, 12, regular, DIM, Gravity.END);
+                cells[i][j] = cell("–", COL_DP, 11, regular, DIM, Gravity.END);
                 r.addView(cells[i][j]);
             }
             card.addView(r);
@@ -92,11 +104,14 @@ final class ReturnsCard {
                 if (bg != h) return;
                 boolean failed = false;
                 for (int i = 0; i < symbols.length; i++) {
-                    Double[] r = returns(symbols[i].split("\\|", 2)[0]);
+                    String[] spec = symbols[i].split("\\|");
+                    Double[] r = returns(spec[0]);
                     if (r == null) {
                         failed = true;
                         continue;
                     }
+                    // "gold10g" / "silverkg": the price column shows the metal itself in rupees, not the ETF's unit.
+                    if (spec.length > 2) r[periods.length] = metalInr(spec[2].trim());
                     int row = i;
                     main.post(() -> { if (bg == h) show(row, r); });
                 }
@@ -114,6 +129,14 @@ final class ReturnsCard {
     }
 
     private void show(int row, Double[] r) {
+        Double price = r[periods.length];
+        if (price != null) {
+            boolean metal = symbols[row].split("\\|").length > 2;
+            java.text.NumberFormat num = java.text.NumberFormat.getNumberInstance(new Locale("en", "IN"));
+            num.setMinimumFractionDigits(metal ? 0 : 2);
+            num.setMaximumFractionDigits(metal ? 0 : 2);
+            prices[row].setText((metal ? "₹" : "") + num.format(price));
+        }
         for (int j = 0; j < periods.length; j++) {
             TextView t = cells[row][j];
             if (r[j] == null) {
@@ -132,7 +155,10 @@ final class ReturnsCard {
         }
     }
 
-    /** The return over each period as a fraction (0.05 = 5%), null where the history is too short. */
+    /**
+     * The return over each period as a fraction (0.05 = 5%), null where the history is too short, then the current
+     * price as the last element.
+     */
     private Double[] returns(String symbol) {
         HttpURLConnection c = null;
         try {
@@ -168,7 +194,8 @@ final class ReturnsCard {
             if (count < 2) return null;
             double price = meta.optDouble("regularMarketPrice", values[count - 1]);
             LocalDate last = dates[count - 1];
-            Double[] out2 = new Double[periods.length];
+            Double[] out2 = new Double[periods.length + 1];
+            out2[periods.length] = price;
             for (int j = 0; j < periods.length; j++) {
                 LocalDate target = back(last, periods[j]);
                 if (target == null) continue;
@@ -186,6 +213,44 @@ final class ReturnsCard {
                 if (base >= 0 && values[base] > 0) out2[j] = price / values[base] - 1;
             }
             return out2;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    /**
+     * Gold per 10 g or silver per kg in rupees: the world price (COMEX, dollars a troy ounce) at today's dollar rate.
+     * India's own price adds import duty and GST on top. Null when either read fails.
+     */
+    private static Double metalInr(String kind) {
+        String symbol = "gold10g".equals(kind) ? "GC=F" : "silverkg".equals(kind) ? "SI=F" : null;
+        if (symbol == null) return null;
+        Double usd = lastPrice(symbol), inr = lastPrice("USDINR=X");
+        if (usd == null || inr == null) return null;
+        double grams = "gold10g".equals(kind) ? 10 : 1000;
+        return usd * inr / 31.1034768 * grams;
+    }
+
+    private static Double lastPrice(String symbol) {
+        HttpURLConnection c = null;
+        try {
+            URL url = new URL("https://query1.finance.yahoo.com/v8/finance/chart/"
+                    + java.net.URLEncoder.encode(symbol, "UTF-8") + "?interval=1d&range=1d");
+            c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(10_000);
+            c.setReadTimeout(15_000);
+            c.setRequestProperty("User-Agent", "Mozilla/5.0");
+            if (c.getResponseCode() != 200) return null;
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (InputStream in = c.getInputStream()) {
+                byte[] buf = new byte[8192];
+                for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+            }
+            JSONObject meta = new JSONObject(out.toString("UTF-8")).getJSONObject("chart").getJSONArray("result")
+                    .getJSONObject(0).getJSONObject("meta");
+            return meta.has("regularMarketPrice") ? meta.getDouble("regularMarketPrice") : null;
         } catch (Exception e) {
             return null;
         } finally {
@@ -220,7 +285,7 @@ final class ReturnsCard {
         LinearLayout r = new LinearLayout(card.getContext());
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setPadding(0, Math.round(2 * density), 0, Math.round(2 * density));
+        r.setPadding(0, Math.round(1 * density), 0, Math.round(1 * density));
         return r;
     }
 
