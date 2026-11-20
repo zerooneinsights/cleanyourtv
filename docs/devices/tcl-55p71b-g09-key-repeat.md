@@ -177,6 +177,15 @@ with `HomeKeyService` bound, but it kept launcherx enabled and went through `sto
 build one bound helper is enough to cost the ramp once launcherx is gone. The empty-list control was not run
 here either.
 
+A TCL 55QM8B on the same build (`G08_4K_GB`, `UTT2.250416.001 AU02`, Germany, the third unit in
+[`examples/tcl-c89b-google-tv`](../../examples/tcl-c89b-google-tv/README.md)), launcherx and setupwraith
+disabled, measured the same: the owner held volume up before `HomeKeyService` was bound and it ramped, then with
+it bound alone and it moved one step per press. `consume_volume_keys` changed nothing, as on the 75Q7C above.
+`volume_pauses_filter` brought part of it back: a cold hold still moved one step, but a tap followed by a hold
+within the 4 s pause ramped at the firmware's own speed, and the gear (`settings_key_keycodes` 83) and the
+Netflix, Prime Video and YouTube buttons in `app_keys` kept working once the pause ended. The owner kept that
+setup. One session, on Wi-Fi with no soundbar; the empty-list control was not run.
+
 ## The path in the Android 12 source, and a Philips set measured both ways
 
 The Hisense reading above holds line by line in AOSP `android12-release`, and a fourth vendor measures the
@@ -311,13 +320,39 @@ you do.
   bound: an accessibility service that filters nothing reads the window manager's key log (`READ_LOGS`) and
   opens the app, and the system binds it again after each boot. See
   [`tcl-g10-app-keys.md`](tcl-g10-app-keys.md); it was not tried on this G09.
+  A ready-made one for Hisense sets that log `interceptKeyTi keyCode=N down=true repeatCount=0` is
+  [Remote buttons](https://github.com/Abner97/remote-buttons), its own repo listed in [SHOWCASE.md](../../SHOWCASE.md):
+  tested on a Hisense 65Q6N (`lushan`, Google TV 12), where the gear, YouTube, Prime Video, Disney+, Apps and
+  Live TV buttons opened their apps and held volume still ramped. It needs `READ_LOGS` over ADB, which lets it
+  read every app's log, so ask before installing it. It does not parse TCL's lines yet.
 
 - **Keep both with a listener you start by hand.** A script run by the `shell` user can answer the app
   buttons without any service bound, so the ramp stays; see "Both at once" below. It does not come back
   after a reboot, so it is started again each time.
 
-It is a toggle, not a fix: two one-line `settings` writes switch between the two behaviours whenever
-you want, but never both at once.
+- **Keep both with `consume_volume_keys`.** On one AS24 unit the launcher's own volume repeat gave both:
+  TCL Smart TV Pro, device `G09`, product `G09_4K_GB`, Google TV 12, firmware `STT2.230203.001.AS24`, India,
+  measured on 3 November 2026. launcherx and setupwraith were disabled with this launcher as Home, and
+  `InputKeyService` was the only service bound, with key filtering on and `app_keys` mapping 4062 to Netflix,
+  4099 to Prime Video, 4065 to YouTube and 4166 to Sony LIV, plus `83:settings` for the gear. Before the
+  switch that setup stepped once per press, as the bisect above does. With `"consume_volume_keys": true` in
+  the theme, the owner held Volume Up and Down on the real remote and both ramped, a single tap moved exactly
+  one step, and the mapped buttons kept working (Netflix was the one pressed to confirm). The switch makes the
+  helpers swallow Volume Up/Down and repeat a held one themselves (after 500 ms, every 60 ms; see
+  [`themes/README.md`](../../themes/README.md)), so the ramp here is the launcher's, not the dispatcher's, and
+  it needs `key_filter` on: with filtering off the helper never sees the key. The G08 above is the opposite
+  result, where the helpers did not seem to receive the volume key and the switch had nothing to repeat, so
+  hold volume after setting it rather than assume. Not checked: a reboot after the switch, or a soundbar or
+  HDMI eARC setup. Not tried on the AS23 unit the bisect comes from.
+
+- **Keep the buttons and a ramp after a tap with `volume_pauses_filter`.** Where `consume_volume_keys` has
+  nothing to repeat, a volume change can pause the helpers' key filtering for 4 s instead: the first press
+  steps once, and a press or hold inside the pause repeats as usual. On the TCL 55QM8B (G08, Google TV 14)
+  above, a tap followed by a hold ramped and the mapped buttons kept working; a hold with no tap first is
+  still one step. Not tried on a G09.
+
+The first two are a toggle, not a fix: two one-line `settings` writes switch between the two behaviours
+whenever you want, but never both at once.
 
 ## Both at once: a listener you start by hand
 

@@ -119,10 +119,10 @@ private Intent liveTvIntent() {
 With a package that is not installed, both branches return null, so the Inputs menu simply has no Live
 TV row. The Inputs pill stays visible when `liveTvIntent() != null`, when `sourcePanelService` is set,
 when the Coocaa source list is non-empty, or when any non-hidden passthrough input comes back from
-`TvInputManager` (`MainActivity.java:3129`, `:3134`-`:3145`); `live_tv_action` is not a visibility
-condition, and this set has HDMI ports, so the failure is quiet: an Inputs menu that opens onto the HDMI ports it
-finds and the aerial set, with the tuner missing from it. That degraded state was **not** seen on this unit;
-the key was already corrected when the launcher was built for it.
+`TvInputManager` (`updateInputsButton()` in `MainActivity.java`); `live_tv_action` is not a
+visibility condition, and this set has HDMI ports, so the failure is quiet: an Inputs menu that opens
+onto the HDMI ports it finds and the aerial set, with the tuner missing from it. That degraded state was
+**not** seen on this unit; the key was already corrected when the launcher was built for it.
 A set whose tuner app also declares no `LEANBACK_LAUNCHER` entry needs `live_tv_action` as well, as the
 [Changhong 58D4P](changhong-58d4p.md) note shows; whether `aquostvapp` declares one was not checked
 here, because the key works and the resolve call was not run against the set.
@@ -147,8 +147,9 @@ $ adb shell dumpsys tv_input
 One consequence worth knowing before testing it: the Inputs pill is hidden outright when the list would
 be empty (`updateInputsButton()`), so "no Inputs button" on a Sharp set is most often a wrong
 `live_tv_package` with no HDMI source to fall back on; `show_inputs_pill=false` hides the pill at the
-same place and looks identical (`MainActivity.java:3130`-`:3132`, default `true` at `config.xml:349`,
-themable through `Config.java:573`), so check that key before blaming the tuner.
+same place and looks identical (the first check in `updateInputsButton()`, default `true` at
+`show_inputs_pill` in `config.xml`, and themable through `Config.java`), so check that key before
+blaming the tuner.
 
 ## Module cards and the card prompt
 
@@ -181,7 +182,7 @@ and `logcat -s TvHomeCards` prints one line per rejection. The contract is
 - **Any debloat list, and the disabled packages.** The disabled set was not read on 2026-11-01, so it
   is not reproduced here; publishing a set that was never re-checked across reboots is what this
   repository's workflow exists to prevent.
-- **Whether ADB survives a cold boot** (see above), voice/Assistant, casting, HDMI-CEC, the 4K tuner,
+- **Whether ADB survives a cold boot**, voice/Assistant, casting, HDMI-CEC, the 4K tuner,
   recording and HDR. Casting is already absent on this unit at the source, so nothing here should be
   read as a statement about Cast on this model.
 
