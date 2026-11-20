@@ -227,10 +227,47 @@ final class ReturnsCard {
     private static Double metalInr(String kind) {
         String symbol = "gold10g".equals(kind) ? "GC=F" : "silverkg".equals(kind) ? "SI=F" : null;
         if (symbol == null) return null;
+        Double local = puneRate(kind);
+        if (local != null) return local;
         Double usd = lastPrice(symbol), inr = lastPrice("USDINR=X");
         if (usd == null || inr == null) return null;
         double grams = "gold10g".equals(kind) ? 10 : 1000;
         return usd * inr / 31.1034768 * grams;
+    }
+
+    /**
+     * Today's Pune retail rate from GoodReturns' Pune pages: 24-carat gold per gram (times 10), silver per kilogram.
+     * Null when the page can't be read or its wording changes; the world price is used then.
+     */
+    private static Double puneRate(String kind) {
+        boolean gold = "gold10g".equals(kind);
+        HttpURLConnection c = null;
+        try {
+            URL url = new URL(gold ? "https://www.goodreturns.in/gold-rates/pune.html"
+                    : "https://www.goodreturns.in/silver-rates/pune.html");
+            c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(10_000);
+            c.setReadTimeout(20_000);
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 9)");
+            if (c.getResponseCode() != 200) return null;
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (InputStream in = c.getInputStream()) {
+                byte[] buf = new byte[16384];
+                for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+            }
+            String text = out.toString("UTF-8").replaceAll("<[^>]+>", " ")
+                    .replace("&#x20b9;", "₹").replace("&#8377;", "₹").replaceAll("\\s+", " ");
+            // "…stands at ₹12,557 per gram for 24 karat gold…" / "…₹175 per gram and ₹1,75,000 per kilogram"
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(gold
+                    ? "₹\\s?([\\d,]+) per gram for 24 karat" : "₹\\s?([\\d,]+) per kilogram").matcher(text);
+            if (!m.find()) return null;
+            double value = Double.parseDouble(m.group(1).replace(",", ""));
+            return gold ? value * 10 : value;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.disconnect();
+        }
     }
 
     private static Double lastPrice(String symbol) {

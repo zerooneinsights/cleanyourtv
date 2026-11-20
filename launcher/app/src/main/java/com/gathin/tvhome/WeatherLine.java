@@ -81,6 +81,8 @@ final class WeatherLine {
             String[] f = spec.trim().split("\\|");
             if (f.length == 3) add(f[0].trim(), f[1].trim(), f[2].trim());
         }
+        // Shown in alphabetical order of the place names.
+        places.sort((a, b) -> a.name.compareToIgnoreCase(b.name));
     }
 
     /** The old line folds away upwards and the new one flips up into place from below. */
