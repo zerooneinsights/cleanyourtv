@@ -462,11 +462,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     };
     /** Keeps the Home clocks moving on Android before 12 when the firmware stops ACTION_TIME_TICK (see ClockRefresh). */
     private ClockRefresh clockRefresh;
+    /** The subscriptions button red while anything is due within the next few days (or past due), else as usual. */
+    private void updateSubscriptionsAlert() {
+        if (btnSubscriptions == null) return;
+        btnSubscriptions.setCompoundDrawableTintList(Subscriptions.dueSoon(this)
+                ? new ColorStateList(new int[][]{{android.R.attr.state_focused}, {}}, new int[]{0xFF111111, 0xFFFF453A})
+                : subscriptionsPlainTint);
+    }
+
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
             updateGreeting();
             updatePanel();
+            // Home can stay up for days: a subscription coming within its due window turns the button red then.
+            updateSubscriptionsAlert();
             // The pill follows the network callbacks and each return to Home; only the festive light follows the
             // signal level, so only it needs this minute's binder calls (about 7 ms on the UI thread).
             if (festive) updateWifiLabel();
@@ -1316,13 +1326,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (returns != null) returns.start();
         if (news != null) news.start();
         if (commute != null) commute.start();
-        if (subscriptionsCard != null) {
-            subscriptionsCard.setText(Subscriptions.card(this));   // back from editing
-            // Red while anything is due within the next few days (or already past due); its usual colour otherwise.
-            btnSubscriptions.setCompoundDrawableTintList(Subscriptions.dueSoon(this)
-                    ? new ColorStateList(new int[][]{{android.R.attr.state_focused}, {}}, new int[]{0xFF111111, 0xFFFF453A})
-                    : subscriptionsPlainTint);
-        }
+        if (subscriptionsCard != null) subscriptionsCard.setText(Subscriptions.card(this));   // back from editing
+        updateSubscriptionsAlert();
         if (gameDay != null) gameDay.start();
         sky.update();
         wallpaperPlayer.start();

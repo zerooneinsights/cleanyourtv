@@ -50,6 +50,8 @@ final class NewsCard {
     private static final int PER_PLACE = 3;
     /** Kept per place for the full list on the second page; Home shows the first PER_PLACE. */
     private static final int KEEP = 10;
+    /** A posts tab (Tweets, Society) shows at most this many, newest first. */
+    private static final int MAX_POSTS = 20;
     private static final int DIM = 0x99FFFFFF;
     private static final int TEXT = 0xF2FFFFFF;
 
@@ -139,7 +141,7 @@ final class NewsCard {
         card.addView(tabRow);
         for (int i = 0; i < places.size(); i++) {
             TextView tab = text(ctx, places.get(i).label, 12, medium, 0);
-            tab.setPadding(Math.round(12 * d), Math.round(5 * d), Math.round(12 * d), Math.round(5 * d));
+            tab.setPadding(Math.round(9 * d), Math.round(5 * d), Math.round(9 * d), Math.round(5 * d));
             tab.setFocusable(true);
             tab.setTextColor(new ColorStateList(new int[][]{
                     {android.R.attr.state_focused}, {android.R.attr.state_selected}, {}},
@@ -529,7 +531,8 @@ final class NewsCard {
             out.add(s);
         }
         out.sort((a, b) -> Long.compare(b.time, a.time));
-        return out;                                        // every post the script sends, paged on the card
+        // At most MAX_POSTS, the newest; older ones are skipped.
+        return out.size() > MAX_POSTS ? new ArrayList<>(out.subList(0, MAX_POSTS)) : out;
     }
 
     private static String child(Element item, String tag) {
