@@ -74,7 +74,7 @@ final class WeatherLine {
         view.setSingleLine(false);
         view.setMaxLines(1);
         view.setEllipsize(null);
-        view.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14);
+        view.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13);
         this.main = main;
         add(place, latitude, longitude);
         for (String spec : others.split(";")) {

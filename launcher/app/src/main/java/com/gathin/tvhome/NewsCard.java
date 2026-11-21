@@ -294,7 +294,7 @@ final class NewsCard {
         for (int i = 0; i < places.size(); i++) {
             List<String[]> rows = new ArrayList<>();
             for (Story s : stories.get(i)) {
-                rows.add(new String[]{s.title, (s.source.isEmpty() ? "" : s.source + " · ") + age(now - s.time)});
+                rows.add(new String[]{s.title, meta(s.source, age(now - s.time))});
             }
             all.add(new Object[]{places.get(i).label, rows});
         }
@@ -327,7 +327,7 @@ final class NewsCard {
         for (int i = 0; i < PER_PLACE; i++) {
             if (i < list.size()) {
                 Story s = list.get(i);
-                String meta = (s.source.isEmpty() ? "" : s.source + " · ") + age(now - s.time);
+                String meta = meta(s.source, age(now - s.time));
                 headlines[i].setText(withMeta(s.title, meta, 2 * POST_LINE_CHARS - meta.length() - 4));
                 headlines[i].setTextColor(TEXT);
                 ages[i].setText("");
@@ -350,7 +350,7 @@ final class NewsCard {
             while (i + count < list.size() && count < PER_PLACE) {
                 int need = (postText(list.get(i + count)).length() + 20) / POST_LINE_CHARS + 1;
                 // Fits the card's height: about 16dp a line and 14dp a row's gap (8 and 7 here), 156dp in all.
-                if (count > 0 && 8 * (lines + need) + 7 * (count + 1) > 78) break;
+                if (count > 0 && 8 * (lines + need) + 7 * (count + 1) > 70) break;
                 lines += need;
                 count++;
             }
@@ -371,7 +371,7 @@ final class NewsCard {
             row.setVisibility(View.VISIBLE);
             headlines[i].setMaxLines(POST_PAGE_LINES);
             headlines[i].setTextColor(TEXT);
-            String meta = s.source + " · " + age(now - s.time);
+            String meta = meta(s.source, age(now - s.time));
             headlines[i].setText(withMeta(postText(s), meta, Integer.MAX_VALUE));
         }
     }
@@ -399,7 +399,27 @@ final class NewsCard {
         return s.title.length() <= POST_MAX ? s.title : s.title.substring(0, POST_MAX - 1).trim() + "…";
     }
 
+    /** When an x.com / twitter.com post was made, from the ID in its link (X's Snowflake IDs); 0 without one. */
+    private static long statusTime(String link) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("/status(?:es)?/(\\d{15,20})").matcher(link);
+        if (!m.find()) return 0;
+        try {
+            long ms = (Long.parseLong(m.group(1)) >> 22) + 1288834974657L;
+            return ms > 1_400_000_000_000L && ms < System.currentTimeMillis() + 86_400_000L ? ms : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** "Source · 2h", or just whichever of the two there is. */
+    private static String meta(String source, String age) {
+        if (source.isEmpty()) return age;
+        return age.isEmpty() ? source : source + " · " + age;
+    }
+
     private static String age(long ms) {
+        // Without a time (none in the email or link) there's no age to show; not "20778d" since 1970.
+        if (ms > 30L * 365 * 86_400_000L) return "";
         long min = Math.max(0, ms / 60_000L);
         if (min < 60) return min + "m";
         if (min < 48 * 60) return (min / 60) + "h";
@@ -502,11 +522,14 @@ final class NewsCard {
             Story s = new Story();
             s.title = text;
             s.source = post.optString("handle");
-            s.time = post.optLong("time");
+            // The post's own time from its x.com link (the status ID carries it to the millisecond); the email's
+            // date only without one, as the emails' layout varies and some carry no date at all.
+            long fromLink = statusTime(post.optString("link"));
+            s.time = fromLink > 0 ? fromLink : post.optLong("time");
             out.add(s);
         }
         out.sort((a, b) -> Long.compare(b.time, a.time));
-        return out.size() > KEEP ? new ArrayList<>(out.subList(0, KEEP)) : out;
+        return out;                                        // every post the script sends, paged on the card
     }
 
     private static String child(Element item, String tag) {
